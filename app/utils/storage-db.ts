@@ -207,16 +207,45 @@ export const taskStorageIndexedDB = {
 
 // 子任务相关操作
 export const subTaskStorageIndexedDB = {
-  getSubTasks: async (taskId: string): Promise<SubTask[]> => {
+  async getSubTasks(taskId: string): Promise<SubTask[]> {
     const db = await getDB();
-    return db.getAllFromIndex('subTasks', 'by-taskId', taskId);
+    const subTasks = await db.getAllFromIndex('subTasks', 'by-taskId', taskId);
+    console.log('Retrieved subTasks:', subTasks);
+    return subTasks;
   },
-  saveSubTasks: async (taskId: string, subTasks: SubTask[]): Promise<void> => {
+
+  async saveSubTasks(taskId: string, subTasks: SubTask[]): Promise<void> {
+    console.log('Saving subTasks:', subTasks);
     const db = await getDB();
     const tx = db.transaction('subTasks', 'readwrite');
-    await Promise.all([
-      ...subTasks.map(subTask => tx.store.put(subTask)),
-      tx.done
-    ]);
+    const store = tx.objectStore('subTasks');
+
+    for (const subTask of subTasks) {
+      if (!subTask.id) {
+        subTask.id = generateUniqueId();
+        console.log('Generated ID for subTask:', subTask.id);
+      }
+      subTask.taskId = taskId;
+      await store.put(subTask);
+    }
+
+    await tx.done;
+    console.log('Finished saving subTasks');
+  },
+
+  async saveSubTask(subTask: SubTask): Promise<void> {
+    console.log('Saving single subTask:', subTask);
+    if (!subTask.id) {
+      subTask.id = generateUniqueId();
+      console.log('Generated ID:', subTask.id);
+    }
+    const db = await getDB();
+    await db.put('subTasks', subTask);
+  },
+
+  async deleteSubTask(id: string): Promise<void> {
+    console.log(`Deleting subTask with ID: ${id}`);
+    const db = await getDB();
+    await db.delete('subTasks', id);
   },
 };
