@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 加密资产管理器
 
-## Getting Started
+这是一个基于 [Next.js](https://nextjs.org) 开发的加密资产管理工具，旨在帮助用户更好地管理他们的加密钱包、项目和日常任务。
 
-First, run the development server:
+## 安装和运行
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. 确保您的系统已安装 Node.js（推荐版本 14.0.0 或更高）。
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. 克隆项目到本地：
+   ```
+   git clone https://github.com/Shaochuanchao/crypto-portfolio-manager.git
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. 进入项目目录：
+   ```
+   cd crypto-portfolio-manager
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. 安装依赖：
+   ```
+   npm install
+   ```
 
-## Learn More
+5. 运行开发服务器：
+   ```
+   npm run dev
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+6. 在浏览器中打开 [http://localhost:3000](http://localhost:3000) 查看结果。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 功能模块
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 1. 钱包管理
 
-## Deploy on Vercel
+- 添加、编辑和删除钱包
+- 支持多种钱包类型（如 EVM、StarkNet 等）
+- 批量导入钱包
+- 为钱包添加别名、Twitter 和邮箱信息
+- 查看与钱包关联的项目
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 2. 项目管理
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 添加、编辑和删除项目
+- 设置项目详细信息（如名称、描述、社交媒体链接等）
+- 标记项目为必做或非必做
+- 设置项目阶段和空投阶段
+- 关联钱包到项目
+
+### 3. 任务管理
+
+- 创建每日任务和一次性任务
+- 将任务关联到特定项目
+- 设置任务开始和结束时间
+- 添加任务说明和攻略链接
+- 创建和管理子任务
+
+## 贡献
+
+欢迎提交 Pull Requests 来改进这个项目。对于重大更改，请先开 issue 讨论您想要改变的内容。
+
+## 许可证
+
+[MIT](https://choosealicense.com/licenses/mit/)

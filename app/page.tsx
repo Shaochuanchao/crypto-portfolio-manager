@@ -1,9 +1,5 @@
-import CryptoPortfolioManager from './components/CryptoPortfolioManager'
+import { redirect } from 'next/navigation'
 
 export default function Home() {
-  return (
-    <main>
-      <CryptoPortfolioManager />
-    </main>
-  )
+  redirect('/wallets')
 }

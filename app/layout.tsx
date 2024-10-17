@@ -1,12 +1,12 @@
 import './globals.css'
-import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import Layout from './components/Layout'
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata: Metadata = {
+export const metadata = {
   title: '加密资产管理器',
-  description: '管理您的加密钱包、空投和每日任务',
+  description: '管理您的加密钱包、项目和每日任务',
 }
 
 export default function RootLayout({
@@ -15,8 +15,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="zh">
-      <body className={inter.className}>{children}</body>
+    <html lang="en">
+      <body className={inter.className}>
+        <Layout>{children}</Layout>
+      </body>
     </html>
   )
 }
