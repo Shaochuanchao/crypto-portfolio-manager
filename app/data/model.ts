@@ -27,22 +27,25 @@ export interface Project {
 }
 
 export interface Task {
-    id: string
-    name: string
-    projectId: string
-    startDate: string
-    endDate: string
-    guideLink: string
-    description: string
-    isDaily: boolean
-    subTaskCount: number
-    isDeleted: boolean
-  }
-  
-  export interface SubTask {
+    id: string;
+    name: string;
+    projectId: string;
+    startDate: string;
+    endDate: string;
+    guideLink: string;
+    description: string;
+    isDaily: boolean;
+    subTaskCount: number;
+    isDeleted: boolean;
+    createdAt: string;
+    priority: number; // 1-5，5 表示最高优先级
+    priorityNote: string; // 优先级备注
+}
+
+export interface SubTask {
     id: string
     taskId: string
     name: string
     description: string
     guideLink: string
-  }
+}

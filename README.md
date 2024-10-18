@@ -21,12 +21,19 @@
    npm install
    ```
 
-5. 运行开发服务器：
+5. 配置环境变量：
+   - 复制 `.env.example` 文件并重命名为 `.env`
+   - 在 `.env` 文件中，设置您的 Etherscan API 密钥：
+     ```
+     ETHERSCAN_API_KEY=您的_ETHERSCAN_API_KEY
+     ```
+
+6. 运行开发服务器：
    ```
    npm run dev
    ```
 
-6. 在浏览器中打开 [http://localhost:3000](http://localhost:3000) 查看结果。
+7. 在浏览器中打开 [http://localhost:3000](http://localhost:3000) 查看结果。
 
 ## 功能模块
 
@@ -53,6 +60,10 @@
 - 设置任务开始和结束时间
 - 添加任务说明和攻略链接
 - 创建和管理子任务
+
+### 4. 工具
+
+- 实时显示以太坊 Gas 价格（需要 Etherscan API 密钥）
 
 ## 贡献
 

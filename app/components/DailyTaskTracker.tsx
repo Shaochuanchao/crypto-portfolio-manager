@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Project, Task, SubTask } from '../data/model'
 import { projectStorageIndexedDB, taskStorageIndexedDB, subTaskStorageIndexedDB } from '../utils/storage-db'
-import { PlusCircle, Edit, Trash2, List, Plus } from 'lucide-react'
+import { PlusCircle, Edit, Trash2, List, Plus, CheckSquare, Star, ChevronLeft, ChevronRight } from 'lucide-react'
+import { truncateString } from '../utils/helpers'; // 假设我们在 utils 文件夹中创建了这个辅助函数
 
 export default function TaskManager() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -34,26 +35,64 @@ export default function TaskManager() {
     description: '',
     isDaily: true,
     subTaskCount: 0,
-    isDeleted: false
+    isDeleted: false,
+    createdAt: '',
+    priority: 5, // 默认最高优先级
+    priorityNote: '',
   })
 
   const [editingSubTask, setEditingSubTask] = useState<SubTask | null>(null)
   const [showEditSubTask, setShowEditSubTask] = useState(false)
+  const [completedTasks, setCompletedTasks] = useState<{ [key: string]: string }>({})
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const [currentPage, setCurrentPage] = useState(1)
+  const tasksPerPage = 10
 
   useEffect(() => {
     const loadData = async () => {
       setProjects(await projectStorageIndexedDB.getProjects())
-      setTasks(await taskStorageIndexedDB.getTasks())
+      const loadedTasks = await taskStorageIndexedDB.getTasks()
+      setTasks(loadedTasks)
+      
+      // 加载已完成任务
+      const storedCompletedTasks = localStorage.getItem('completedTasks')
+      if (storedCompletedTasks) {
+        setCompletedTasks(JSON.parse(storedCompletedTasks))
+      }
     }
     loadData()
   }, [])
 
+  useEffect(() => {
+    // 每天凌晨重置每日任务的完成状态
+    const resetDailyTasks = () => {
+      const today = new Date().toISOString().split('T')[0]
+      const updatedCompletedTasks = { ...completedTasks }
+      Object.keys(updatedCompletedTasks).forEach(taskId => {
+        if (updatedCompletedTasks[taskId] !== today) {
+          delete updatedCompletedTasks[taskId]
+        }
+      })
+      setCompletedTasks(updatedCompletedTasks)
+      localStorage.setItem('completedTasks', JSON.stringify(updatedCompletedTasks))
+    }
+
+    const now = new Date()
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+    const timeToMidnight = tomorrow.getTime() - now.getTime()
+
+    const timer = setTimeout(resetDailyTasks, timeToMidnight)
+
+    return () => clearTimeout(timer)
+  }, [completedTasks])
+
   const addTask = async () => {
     if (newTask.name && newTask.projectId) {
-      const taskToAdd = { ...newTask, id: Date.now().toString() }
-      const updatedTasks = [...tasks, taskToAdd]
+      const taskToAdd = { ...newTask, id: Date.now().toString(), createdAt: new Date().toISOString() }
+      await taskStorageIndexedDB.saveTask(taskToAdd)
+      const updatedTasks = await taskStorageIndexedDB.getTasks()
       setTasks(updatedTasks)
-      await taskStorageIndexedDB.saveTasks(updatedTasks)
       setShowAddTask(false)
       setNewTask({
         id: '',
@@ -65,7 +104,10 @@ export default function TaskManager() {
         description: '',
         isDaily: activeTab === 'daily',
         subTaskCount: 0,
-        isDeleted: false
+        isDeleted: false,
+        createdAt: new Date().toISOString(),
+        priority: 5,
+        priorityNote: '',
       })
     } else {
       alert('任务名称和关联项目不能为空！')
@@ -79,9 +121,9 @@ export default function TaskManager() {
 
   const updateTask = async () => {
     if (newTask.name && newTask.projectId) {
-      const updatedTasks = tasks.map(t => t.id === newTask.id ? newTask : t)
+      await taskStorageIndexedDB.saveTask(newTask)
+      const updatedTasks = await taskStorageIndexedDB.getTasks()
       setTasks(updatedTasks)
-      await taskStorageIndexedDB.saveTasks(updatedTasks)
       setShowAddTask(false)
       setNewTask({
         id: '',
@@ -93,7 +135,10 @@ export default function TaskManager() {
         description: '',
         isDaily: activeTab === 'daily',
         subTaskCount: 0,
-        isDeleted: false
+        isDeleted: false,
+        createdAt: new Date().toISOString(),
+        priority: 5,
+        priorityNote: '',
       })
     } else {
       alert('任务名称和关联项目不能为空！')
@@ -135,7 +180,11 @@ export default function TaskManager() {
     }
   }
 
-  const filteredTasks = tasks.filter(task => !task.isDeleted && task.isDaily === (activeTab === 'daily'))
+  const filteredTasks = tasks.filter(task => 
+    !task.isDeleted && 
+    task.isDaily === (activeTab === 'daily') &&
+    task.name.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   const addSubTask = async () => {
     if (newSubTask.name && selectedTask) {
@@ -182,10 +231,76 @@ export default function TaskManager() {
     }
   }
 
+  const toggleTaskCompletion = (taskId: string) => {
+    const today = new Date().toISOString().split('T')[0]
+    setCompletedTasks(prev => {
+      const updated = { ...prev }
+      if (updated[taskId] === today) {
+        delete updated[taskId]
+      } else {
+        updated[taskId] = today
+      }
+      localStorage.setItem('completedTasks', JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const isTaskCompleted = (taskId: string) => {
+    const today = new Date().toISOString().split('T')[0]
+    return completedTasks[taskId] === today
+  }
+
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    const aCompleted = isTaskCompleted(a.id);
+    const bCompleted = isTaskCompleted(b.id);
+
+    // 首先按完成状态排序
+    if (aCompleted !== bCompleted) {
+      return aCompleted ? 1 : -1;
+    }
+
+    // 如果完成状态相同，则按优先级排序
+    if (a.priority !== b.priority) {
+      return b.priority - a.priority;
+    }
+
+    // 如果优先级也相同，则按创建时间排序
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  const renderPriorityStars = (priority: number = 5) => {
+    return Array(5).fill(0).map((_, index) => (
+      <Star
+        key={index}
+        size={16}
+        className={index < priority ? 'text-yellow-500 fill-yellow-500' : 'text-yellow-200'}
+      />
+    ))
+  }
+
+  const indexOfLastTask = currentPage * tasksPerPage
+  const indexOfFirstTask = indexOfLastTask - tasksPerPage
+  const currentTasks = sortedTasks.slice(indexOfFirstTask, indexOfLastTask)
+
+  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / tasksPerPage))
+
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
+
   return (
     <div className="bg-yellow-100 rounded-lg p-6 shadow-lg relative">
       <h2 className="text-2xl font-bold mb-4 text-yellow-800">任务管理</h2>
       
+      {/* 搜索框 */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="搜索任务..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+        />
+      </div>
+
       <div className="mb-4">
         <button
           onClick={() => setActiveTab('daily')}
@@ -212,55 +327,108 @@ export default function TaskManager() {
       </div>
 
       <div className="bg-yellow-50 rounded-md p-4">
-        {filteredTasks.map((task) => (
-          <div key={task.id} className="mb-4 p-4 bg-yellow-200 rounded-md relative">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-xl font-bold text-yellow-800">{task.name}</h3>
-                <p className="text-yellow-700">
-                  项目: 
-                  <button 
-                    onClick={() => openProjectDetails(task.projectId)}
-                    className="text-blue-500 hover:text-blue-700 underline ml-1"
+        {currentTasks.map((task) => {
+          const isCompleted = isTaskCompleted(task.id)
+          return (
+            <div 
+              key={task.id} 
+              className={`mb-4 p-4 rounded-md relative ${
+                isCompleted ? 'bg-gray-200' : 'bg-yellow-200'
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center">
+                  <button
+                    onClick={() => toggleTaskCompletion(task.id)}
+                    className={`mr-2 p-1 rounded ${
+                      isCompleted ? 'bg-gray-400' : 'bg-yellow-400'
+                    }`}
                   >
-                    {projects.find(p => p.id === task.projectId)?.name}
+                    <CheckSquare size={20} className={isCompleted ? 'text-white' : 'text-yellow-800'} />
                   </button>
-                </p>
-                <p className="text-yellow-700">开始时间: {task.startDate}</p>
-                <p className="text-yellow-700">结束时间: {task.endDate}</p>
-                <p className="text-yellow-700">说明: {task.description}</p>
-                <a href={task.guideLink} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700">
-                  {task.guideLink}
-                </a>
+                  <div>
+                    <h3 className={`text-xl font-bold ${isCompleted ? 'text-gray-600' : 'text-yellow-800'}`}>
+                      {task.name}
+                    </h3>
+                    <div className="flex items-center mt-1">
+                      {renderPriorityStars(task.priority)}
+                      {task.priorityNote && (
+                        <span className="ml-2 text-sm text-gray-600">{task.priorityNote}</span>
+                      )}
+                    </div>
+                    <p className={isCompleted ? 'text-gray-500' : 'text-yellow-700'}>
+                      项目: 
+                      <button 
+                        onClick={() => openProjectDetails(task.projectId)}
+                        className="text-blue-500 hover:text-blue-700 underline ml-1"
+                      >
+                        {projects.find(p => p.id === task.projectId)?.name}
+                      </button>
+                    </p>
+                    <p className={isCompleted ? 'text-gray-500' : 'text-yellow-700'}>开始时间: {task.startDate}</p>
+                    <p className={isCompleted ? 'text-gray-500' : 'text-yellow-700'}>结束时间: {task.endDate}</p>
+                    <p className={isCompleted ? 'text-gray-500' : 'text-yellow-700'}>说明: {task.description}</p>
+                    <a 
+                      href={task.guideLink} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-blue-500 hover:text-blue-700 block overflow-hidden text-ellipsis"
+                      title={task.guideLink}
+                    >
+                      {truncateString(task.guideLink, 50)}
+                    </a>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button onClick={() => editTask(task)} className="text-yellow-600 hover:text-yellow-800 p-1">
+                    <Edit size={24} />
+                  </button>
+                  <button onClick={() => deleteTask(task.id)} className="text-yellow-600 hover:text-yellow-800 p-1">
+                    <Trash2 size={24} />
+                  </button>
+                </div>
               </div>
-              <div className="flex space-x-2">
-                <button onClick={() => editTask(task)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                  <Edit size={24} />
+              <div className="absolute bottom-2 right-2 flex space-x-2">
+                <button
+                  onClick={() => openSubTasks(task)}
+                  className="bg-yellow-400 hover:bg-yellow-500 text-yellow-800 font-bold py-1 px-2 rounded flex items-center"
+                >
+                  <List size={16} className="mr-1" />
+                  子任务 ({task.subTaskCount})
                 </button>
-                <button onClick={() => deleteTask(task.id)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                  <Trash2 size={24} />
+                <button
+                  onClick={() => openAddSubTask(task)}
+                  className="bg-yellow-400 hover:bg-yellow-500 text-yellow-800 font-bold py-1 px-2 rounded flex items-center"
+                >
+                  <Plus size={16} className="mr-1" />
+                  添加子任务
                 </button>
               </div>
             </div>
-            <div className="absolute bottom-2 right-2 flex space-x-2">
-              <button
-                onClick={() => openSubTasks(task)}
-                className="bg-yellow-400 hover:bg-yellow-500 text-yellow-800 font-bold py-1 px-2 rounded flex items-center"
-              >
-                <List size={16} className="mr-1" />
-                子任务 ({task.subTaskCount})
-              </button>
-              <button
-                onClick={() => openAddSubTask(task)}
-                className="bg-yellow-400 hover:bg-yellow-500 text-yellow-800 font-bold py-1 px-2 rounded flex items-center"
-              >
-                <Plus size={16} className="mr-1" />
-                添加子任务
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
+
+      {/* 分页控件 */}
+      {sortedTasks.length > 0 && (
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={() => paginate(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="mr-2 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded disabled:opacity-50"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <span className="mx-2 py-2">{currentPage} / {totalPages}</span>
+          <button
+            onClick={() => paginate(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="ml-2 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded disabled:opacity-50"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      )}
 
       {/* 添加/编辑任务模态框 */}
       {showAddTask && (
@@ -357,6 +525,33 @@ export default function TaskManager() {
                   className="mr-2"
                 />
                 <label htmlFor="task-is-daily" className="text-yellow-800">每日任务</label>
+              </div>
+              <div>
+                <label className="block text-yellow-700 text-sm font-bold mb-2">优先级</label>
+                <div className="flex items-center">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => setNewTask({...newTask, priority: star})}
+                      className="mr-1"
+                    >
+                      <Star
+                        size={24}
+                        className={star <= (newTask.priority || 5) ? 'text-yellow-500 fill-yellow-500' : 'text-yellow-200'}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-yellow-700 text-sm font-bold mb-2">优先级备注</label>
+                <input
+                  type="text"
+                  placeholder="优先级备注（可选）"
+                  value={newTask.priorityNote}
+                  onChange={(e) => setNewTask({...newTask, priorityNote: e.target.value})}
+                  className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                />
               </div>
             </div>
             <div className="flex justify-end mt-4">

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { PlusCircle, X, Edit, Copy, Trash2, RefreshCw, ChevronLeft, ChevronRight, CheckCircle, XCircle, Search } from 'lucide-react'
 import { Project, Wallet } from '../data/model'
 import { projectStorageIndexedDB, walletStorageIndexedDB } from '../utils/storage-db'
+import { truncateString } from '../utils/helpers'
 
 const PREDEFINED_TAGS = ['空投', 'DeFi']
 const PROJECT_STAGES = ['测试', '主网上线']
@@ -27,7 +28,7 @@ export default function ProjectManager() {
     twitter: '',
     isMandatory: false,
     tags: [],  // 确保这里有 tags 属性
-    stage: PROJECT_STAGES[0],  // 设置默认值为第一个选���
+    stage: PROJECT_STAGES[0],  // 置默认值为第一个项
     airdropStage: AIRDROP_STAGES[0],  // 设置默认值为第一个选项
     estimatedPrice: '',
     endDate: '',
@@ -41,6 +42,7 @@ export default function ProjectManager() {
   const [walletFilterType, setWalletFilterType] = useState('All')
   const [walletSearchTerm, setWalletSearchTerm] = useState('')
   const [walletTypes, setWalletTypes] = useState<string[]>([])
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -56,6 +58,26 @@ export default function ProjectManager() {
     loadData()
   }, [])
 
+  const resetNewProject = () => {
+    setNewProject({
+      id: '',
+      name: '',
+      description: '',
+      website: '',
+      discord: '',
+      telegram: '',
+      twitter: '',
+      isMandatory: false,
+      tags: [],
+      stage: PROJECT_STAGES[0],
+      airdropStage: AIRDROP_STAGES[0],
+      estimatedPrice: '',
+      endDate: '',
+      relatedWallets: [],
+      createdAt: new Date().toISOString(),
+    });
+  };
+
   const addProject = async () => {
     if (newProject.name.trim()) {
       const projectToAdd = {
@@ -65,29 +87,13 @@ export default function ProjectManager() {
         isDeleted: false,
         createdAt: new Date().toISOString(),
         tags: newProject.tags || [],
-        stage: newProject.stage || PROJECT_STAGES[0],  // 确保有默认值
-        airdropStage: newProject.airdropStage || AIRDROP_STAGES[0],  // 确保有默认值
+        stage: newProject.stage || PROJECT_STAGES[0],
+        airdropStage: newProject.airdropStage || AIRDROP_STAGES[0],
       }
       await projectStorageIndexedDB.saveProject(projectToAdd)
       const updatedProjects = await projectStorageIndexedDB.getProjects()
       setProjects(updatedProjects)
-      setNewProject({
-        id: '',
-        name: '',
-        description: '',
-        website: '',
-        discord: '',
-        telegram: '',
-        twitter: '',
-        isMandatory: false,
-        tags: [],
-        stage: PROJECT_STAGES[0],  // 重置为默认值
-        airdropStage: AIRDROP_STAGES[0],  // 重置为默认值
-        estimatedPrice: '',
-        endDate: '',
-        relatedWallets: [],
-        createdAt: new Date().toISOString(),
-      })
+      resetNewProject();
       setShowAddProject(false)
     } else {
       alert('项目名称不能为空！')
@@ -122,15 +128,16 @@ export default function ProjectManager() {
     if (editingProject) {
       const updatedProject = { 
         ...editingProject,
-        ...newProject,  // 使用最新的 newProject 状态
+        ...newProject,
         updatedAt: new Date().toISOString(),
       }
-      console.log('Updating project:', updatedProject);  // 添加日志
+      console.log('Updating project:', updatedProject);
       await projectStorageIndexedDB.saveProject(updatedProject)
       const updatedProjects = await projectStorageIndexedDB.getProjects()
-      console.log('Updated projects:', updatedProjects);  // 添加日志
+      console.log('Updated projects:', updatedProjects);
       setProjects(updatedProjects)
       setEditingProject(null)
+      resetNewProject();
       setShowAddProject(false)
     } else {
       addProject()
@@ -161,7 +168,8 @@ export default function ProjectManager() {
   })
 
   const filteredProjects = sortedProjects.filter(project => 
-    selectedTags.length === 0 || selectedTags.some(tag => project.tags.includes(tag))
+    (selectedTags.length === 0 || selectedTags.some(tag => project.tags.includes(tag))) &&
+    project.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const indexOfLastProject = currentPage * projectsPerPage
@@ -222,6 +230,17 @@ export default function ProjectManager() {
     <div className="bg-yellow-100 rounded-lg p-6 shadow-lg relative">
       <h2 className="text-2xl font-bold mb-4 text-yellow-800">项目管理</h2>
       
+      {/* 搜索框 */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="搜索项目..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+        />
+      </div>
+
       {/* 标签筛选 */}
       <div className="mb-4 flex flex-wrap gap-2">
         {PREDEFINED_TAGS.map(tag => (
@@ -237,7 +256,7 @@ export default function ProjectManager() {
         ))}
       </div>
 
-      {/* 添加项目和标签按钮 */}
+      {/* 添加项目标签按钮 */}
       <div className="absolute top-6 right-6 flex space-x-2">
         <button onClick={() => setShowAddProject(true)} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded inline-flex items-center">
           <PlusCircle className="mr-2" size={18} />
@@ -250,7 +269,7 @@ export default function ProjectManager() {
       </div>
 
       {/* 项目列表 */}
-      <div className="space-y-4 mt-8">
+      <div className="space-y-4">
         {filteredProjects.length > 0 ? (
           currentProjects.map((project, index) => (
             <div 
@@ -285,10 +304,26 @@ export default function ProjectManager() {
                 </div>
               </div>
               <div className="mt-2 space-y-1">
-                <p className="text-yellow-600">网站: <a href={project.website} className="text-blue-500 hover:underline">{project.website}</a></p>
-                <p className="text-yellow-600">Discord: <a href={project.discord} className="text-blue-500 hover:underline">{project.discord}</a></p>
-                <p className="text-yellow-600">Telegram: <a href={project.telegram} className="text-blue-500 hover:underline">{project.telegram}</a></p>
-                <p className="text-yellow-600">Twitter: <a href={project.twitter} className="text-blue-500 hover:underline">{project.twitter}</a></p>
+                <p className="text-yellow-600">
+                  网站: <a href={project.website} className="text-blue-500 hover:underline" title={project.website}>
+                    {truncateString(project.website, 30)}
+                  </a>
+                </p>
+                <p className="text-yellow-600">
+                  Discord: <a href={project.discord} className="text-blue-500 hover:underline" title={project.discord}>
+                    {truncateString(project.discord, 30)}
+                  </a>
+                </p>
+                <p className="text-yellow-600">
+                  Telegram: <a href={project.telegram} className="text-blue-500 hover:underline" title={project.telegram}>
+                    {truncateString(project.telegram, 30)}
+                  </a>
+                </p>
+                <p className="text-yellow-600">
+                  Twitter: <a href={project.twitter} className="text-blue-500 hover:underline" title={project.twitter}>
+                    {truncateString(project.twitter, 30)}
+                  </a>
+                </p>
               </div>
               <p className="text-yellow-700">所处阶段: {project.stage}</p>
               <p className="text-yellow-700">空投阶段: {project.airdropStage}</p>
@@ -370,7 +405,7 @@ export default function ProjectManager() {
       {showAddProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
           <div className="bg-yellow-100 p-6 rounded-lg w-3/4 max-w-4xl my-8">
-            <h3 className="text-xl font-bold mb-4 text-yellow-800">{editingProject ? '编辑项目' : '新增目'}</h3>
+            <h3 className="text-xl font-bold mb-4 text-yellow-800">{editingProject ? '编辑项目' : '新增项目'}</h3>
             <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-name">
@@ -418,7 +453,7 @@ export default function ProjectManager() {
                   <input
                     id="project-website"
                     type="text"
-                    placeholder="官地址"
+                    placeholder="官网地址"
                     value={newProject.website}
                     onChange={(e) => setNewProject({...newProject, website: e.target.value})}
                     className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
@@ -575,7 +610,14 @@ export default function ProjectManager() {
               </div>
             </div>
             <div className="flex justify-end mt-4">
-              <button onClick={() => {setShowAddProject(false); setEditingProject(null);}} className="mr-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded">
+              <button 
+                onClick={() => {
+                  setShowAddProject(false);
+                  setEditingProject(null);
+                  resetNewProject();
+                }} 
+                className="mr-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded"
+              >
                 取消
               </button>
               <button onClick={updateProject} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded">

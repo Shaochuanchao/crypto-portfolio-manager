@@ -4,52 +4,87 @@ import { useState, useEffect } from 'react'
 import { Wallet, Coins, CheckSquare, Github, X } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { getGasPrice, GasPrice } from '../utils/api_etherscan'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [activeTab, setActiveTab] = useState('wallets')
+  const [gasPrice, setGasPrice] = useState<GasPrice | null>(null)
 
   useEffect(() => {
     if (pathname.includes('/wallets')) setActiveTab('wallets')
     else if (pathname.includes('/projects')) setActiveTab('projects')
     else if (pathname.includes('/tasks')) setActiveTab('tasks')
+    else if (pathname.includes('/tools')) setActiveTab('tools')
   }, [pathname])
+
+  useEffect(() => {
+    const fetchGasPrice = async () => {
+      try {
+        const price = await getGasPrice()
+        setGasPrice(price)
+      } catch (error) {
+        console.error('Failed to fetch gas price:', error)
+      }
+    }
+
+    fetchGasPrice()
+    const interval = setInterval(fetchGasPrice, 60000) // 每分钟更新一次
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const formatGasPrice = (price: string) => Number(price).toFixed(2)
 
   return (
     <div className="flex flex-col min-h-screen bg-yellow-50 text-yellow-900">
       <nav className="bg-yellow-200 p-4 sticky top-0 z-10 shadow-md">
         <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-yellow-800">加密资产管理器</h1>
-          <div className="flex space-x-4">
-            <Link href="/wallets">
-              <button
-                className={`px-4 py-2 rounded-md ${activeTab === 'wallets' ? 'bg-yellow-400' : 'bg-yellow-300'}`}
-              >
-                <Wallet className="inline-block mr-2" size={18} />
-                钱包
-              </button>
+          <h1 className="text-2xl font-bold text-yellow-800">
+            加密资产管理器{activeTab === 'tools' ? ' - 工具' : ''}
+          </h1>
+          {gasPrice && pathname !== '/tools' && (
+            <Link href="/tools" className="flex items-center">
+              <div className="text-sm">
+                <span className="font-bold">Gas:</span> 
+                <span className="ml-1">慢 {formatGasPrice(gasPrice.SafeGasPrice)}</span>
+                <span className="ml-1">平均 {formatGasPrice(gasPrice.ProposeGasPrice)}</span>
+                <span className="ml-1">快 {formatGasPrice(gasPrice.FastGasPrice)}</span>
+              </div>
             </Link>
-            <Link href="/projects">
-              <button
-                className={`px-4 py-2 rounded-md ${activeTab === 'projects' ? 'bg-yellow-400' : 'bg-yellow-300'}`}
-              >
-                <Coins className="inline-block mr-2" size={18} />
-                项目
-              </button>
-            </Link>
-            <Link href="/tasks">
-              <button
-                className={`px-4 py-2 rounded-md ${activeTab === 'tasks' ? 'bg-yellow-400' : 'bg-yellow-300'}`}
-              >
-                <CheckSquare className="inline-block mr-2" size={18} />
-                每日任务
-              </button>
-            </Link>
-          </div>
+          )}
+          {pathname !== '/tools' && (
+            <div className="flex space-x-4">
+              <Link href="/wallets">
+                <button
+                  className={`px-4 py-2 rounded-md ${activeTab === 'wallets' ? 'bg-yellow-400' : 'bg-yellow-300'}`}
+                >
+                  <Wallet className="inline-block mr-2" size={18} />
+                  钱包
+                </button>
+              </Link>
+              <Link href="/projects">
+                <button
+                  className={`px-4 py-2 rounded-md ${activeTab === 'projects' ? 'bg-yellow-400' : 'bg-yellow-300'}`}
+                >
+                  <Coins className="inline-block mr-2" size={18} />
+                  项目
+                </button>
+              </Link>
+              <Link href="/tasks">
+                <button
+                  className={`px-4 py-2 rounded-md ${activeTab === 'tasks' ? 'bg-yellow-400' : 'bg-yellow-300'}`}
+                >
+                  <CheckSquare className="inline-block mr-2" size={18} />
+                  每日任务
+                </button>
+              </Link>
+            </div>
+          )}
         </div>
       </nav>
 
-      <main className="container mx-auto mt-8 p-4 flex-grow">
+      <main className="container mx-auto mt-4 p-4 flex-grow">
         {children}
       </main>
 

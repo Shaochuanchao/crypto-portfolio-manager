@@ -33,6 +33,8 @@ export default function WalletManager() {
   const [currentPage, setCurrentPage] = useState(1)
   const walletsPerPage = 10
 
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     const loadData = async () => {
       const savedWallets = await walletStorageIndexedDB.getWallets()
@@ -127,7 +129,11 @@ export default function WalletManager() {
     }
   }
 
-  const filteredWallets = filterType === 'All' ? wallets : wallets.filter(wallet => wallet.type === filterType)
+  const filteredWallets = wallets.filter(wallet => 
+    (filterType === 'All' || wallet.type === filterType) &&
+    (wallet.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+     (wallet.alias && wallet.alias.toLowerCase().includes(searchTerm.toLowerCase())))
+  );
 
   const indexOfLastWallet = currentPage * walletsPerPage
   const indexOfFirstWallet = indexOfLastWallet - walletsPerPage
@@ -178,6 +184,17 @@ export default function WalletManager() {
     <div className="bg-yellow-100 rounded-lg p-6 shadow-lg relative">
       <h2 className="text-2xl font-bold mb-4 text-yellow-800">钱包管理</h2>
       
+      {/* 搜索框 */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="搜索钱包地址或别名"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+        />
+      </div>
+
       {/* 气泡选择 */}
       <div className="mb-4 flex flex-wrap gap-2">
         <button
