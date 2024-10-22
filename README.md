@@ -23,9 +23,10 @@
 
 5. 配置环境变量：
    - 复制 `.env.example` 文件并重命名为 `.env`
-   - 在 `.env` 文件中，设置您的 Etherscan API 密钥：
+   - 在 `.env` 文件中，设置您的 API 密钥：
      ```
      ETHERSCAN_API_KEY=您的_ETHERSCAN_API_KEY
+     INFURA_API_KEY=您的_INFURA_API_KEY
      ```
 
 6. 运行开发服务器：
@@ -64,6 +65,12 @@
 ### 4. 工具
 
 - 实时显示以太坊 Gas 价格（需要 Etherscan API 密钥）
+
+### 5. Infura API 集成
+
+- 获取不同网络的最新区块信息
+- 分析最新区块中的 top 10 交易合约
+- 计算每个合约在最新区块中消耗的 gas
 
 ## 贡献
 

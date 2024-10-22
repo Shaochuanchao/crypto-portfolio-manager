@@ -58,34 +58,58 @@ export default function TaskManager() {
       // 加载已完成任务
       const storedCompletedTasks = localStorage.getItem('completedTasks')
       if (storedCompletedTasks) {
-        setCompletedTasks(JSON.parse(storedCompletedTasks))
+        const parsedCompletedTasks = JSON.parse(storedCompletedTasks)
+        // 检查并重置过期的每日任务
+        const today = new Date().toISOString().split('T')[0]
+        const updatedCompletedTasks = Object.fromEntries(
+          Object.entries(parsedCompletedTasks).filter(([taskId, date]) => {
+            const task = loadedTasks.find(t => t.id === taskId)
+            return task && (!task.isDaily || date === today)
+          })
+        )
+        setCompletedTasks(updatedCompletedTasks)
+        localStorage.setItem('completedTasks', JSON.stringify(updatedCompletedTasks))
       }
     }
     loadData()
   }, [])
 
   useEffect(() => {
-    // 每天凌晨重置每日任务的完成状态
     const resetDailyTasks = () => {
       const today = new Date().toISOString().split('T')[0]
       const updatedCompletedTasks = { ...completedTasks }
+      let hasChanges = false
       Object.keys(updatedCompletedTasks).forEach(taskId => {
-        if (updatedCompletedTasks[taskId] !== today) {
+        const task = tasks.find(t => t.id === taskId)
+        if (task && task.isDaily && updatedCompletedTasks[taskId] !== today) {
           delete updatedCompletedTasks[taskId]
+          hasChanges = true
         }
       })
-      setCompletedTasks(updatedCompletedTasks)
-      localStorage.setItem('completedTasks', JSON.stringify(updatedCompletedTasks))
+      if (hasChanges) {
+        setCompletedTasks(updatedCompletedTasks)
+        localStorage.setItem('completedTasks', JSON.stringify(updatedCompletedTasks))
+      }
     }
 
+    // 立即执行一次重置
+    resetDailyTasks()
+
+    // 设置每天凌晨重置的定时器
     const now = new Date()
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
     const timeToMidnight = tomorrow.getTime() - now.getTime()
 
-    const timer = setTimeout(resetDailyTasks, timeToMidnight)
+    const timer = setTimeout(() => {
+      resetDailyTasks()
+      // 设置每24小时重复执行
+      setInterval(resetDailyTasks, 24 * 60 * 60 * 1000)
+    }, timeToMidnight)
 
-    return () => clearTimeout(timer)
-  }, [completedTasks])
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [completedTasks, tasks])
 
   const addTask = async () => {
     if (newTask.name && newTask.projectId) {
