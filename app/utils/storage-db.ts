@@ -1,5 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { Wallet, Project, Task, SubTask } from '../data/model';
+import { Wallet, Project, Task, SubTask, Chain } from '../data/model';
 
 interface MyDB extends DBSchema {
   wallets: {
@@ -22,6 +22,10 @@ interface MyDB extends DBSchema {
     key: string;
     value: SubTask[];
     indexes: { 'by-taskId': string };
+  };
+  chains: {
+    key: string;
+    value: Chain[];
   };
 }
 
@@ -248,4 +252,28 @@ export const subTaskStorageIndexedDB = {
     const db = await getDB();
     await db.delete('subTasks', id);
   },
+};
+
+export const chainStorageIndexedDB = {
+  getChains: async (): Promise<Chain[]> => {
+    const db = await getDB();
+    return db.getAll('chains');
+  },
+
+  saveChains: async (chains: Chain[]): Promise<void> => {
+    const db = await getDB();
+    const tx = db.transaction('chains', 'readwrite');
+    await Promise.all([
+      ...chains.map(chain => tx.store.put(chain)),
+      tx.done
+    ]);
+  },
+
+  getLastUpdated: async (): Promise<string | null> => {
+    const chains = await chainStorageIndexedDB.getChains();
+    if (chains.length > 0) {
+      return chains[0].lastUpdated || null;
+    }
+    return null;
+  }
 };

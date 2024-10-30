@@ -25,8 +25,14 @@
    - 复制 `.env.example` 文件并重命名为 `.env`
    - 在 `.env` 文件中，设置您的 API 密钥：
      ```
+     # Etherscan API（用于获取 Gas 价格）
      ETHERSCAN_API_KEY=您的_ETHERSCAN_API_KEY
-     INFURA_API_KEY=您的_INFURA_API_KEY
+
+     # OKX API（用于查询钱包资产）
+     NEXT_PUBLIC_OKX_API_KEY=您的_OKX_API_KEY
+     NEXT_PUBLIC_OKX_SECRET_KEY=您的_OKX_SECRET_KEY
+     NEXT_PUBLIC_OKX_PASSPHRASE=您的_OKX_PASSPHRASE
+     NEXT_PUBLIC_OKX_PROJECT_ID=您的_OKX_PROJECT_ID
      ```
 
 6. 运行开发服务器：
@@ -45,6 +51,9 @@
 - 批量导入钱包
 - 为钱包添加别名、Twitter 和邮箱信息
 - 查看与钱包关联的项目
+- 实时查看钱包资产（支持多链资产查询）
+  - EVM 钱包支持查询多个网络的资产（包括 Ethereum、Optimism、BSC、Arbitrum、zkSync Era、Polygon zkEVM、Base、Linea 等）
+  - StarkNet 钱包提供 Starkscan 链接
 
 ### 2. 项目管理
 
@@ -56,21 +65,25 @@
 
 ### 3. 任务管理
 
-- 创建每日任务和一次性任务
+- 创建每日任务、一次性任务和鸡肋任务
 - 将任务关联到特定项目
+- 设置任务优先级（1-5星）和优先级备注
 - 设置任务开始和结束时间
 - 添加任务说明和攻略链接
 - 创建和管理子任务
+- 每日任务自动重置完成状态
 
-### 4. 工具
+### 4. 工具功能
 
-- 实时显示以太坊 Gas 价格（需要 Etherscan API 密钥）
+- 实时显示以太坊 Gas 价格（每分钟更新）
+- 支持查看多链资产明细
+- 资产价值自动缓存（1分钟更新一次）
 
-### 5. Infura API 集成
+## 数据存储
 
-- 获取不同网络的最新区块信息
-- 分析最新区块中的 top 10 交易合约
-- 计算每个合约在最新区块中消耗的 gas
+- 使用 IndexedDB 进行本地数据存储
+- 支持数据的持久化存储和缓存管理
+- 自动管理 API 请求频率限制
 
 ## 贡献
 

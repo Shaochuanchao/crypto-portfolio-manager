@@ -49,3 +49,11 @@ export interface SubTask {
     description: string
     guideLink: string
 }
+
+export interface Chain {
+  name: string;
+  logoUrl: string;
+  shortName: string;
+  chainIndex: string;
+  lastUpdated?: string;
+}

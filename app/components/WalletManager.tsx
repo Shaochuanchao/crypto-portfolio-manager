@@ -1,9 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusCircle, Edit2, Trash2, Info, ChevronLeft, ChevronRight } from 'lucide-react'
+import { PlusCircle, Edit2, Trash2, Info, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import Link from 'next/link'
 import { Wallet, Project } from '../data/model'
 import { walletStorageIndexedDB, projectStorageIndexedDB } from '../utils/storage-db'
+import { getCachedTotalValue } from '../utils/api_okx'
+
+interface WalletBalance {
+  value: string;
+  lastUpdated: number;
+}
 
 export default function WalletManager() {
   const [wallets, setWallets] = useState<Wallet[]>([])
@@ -35,6 +42,108 @@ export default function WalletManager() {
 
   const [searchTerm, setSearchTerm] = useState('');
 
+  const [walletBalances, setWalletBalances] = useState<{[address: string]: WalletBalance}>({})
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // 从 localStorage 加载缓存的余额数据
+  useEffect(() => {
+    const loadCachedBalances = () => {
+      try {
+        const cachedBalances = localStorage.getItem('walletBalances')
+        if (cachedBalances) {
+          const parsedBalances = JSON.parse(cachedBalances)
+          // 验证缓存数据的有效性
+          if (typeof parsedBalances === 'object' && parsedBalances !== null) {
+            setWalletBalances(parsedBalances)
+            
+            // 检查是否需要刷新任何余额
+            const now = Date.now()
+            let needsRefresh = false
+            
+            Object.entries(parsedBalances).forEach(([address, balance]: [string, any]) => {
+              if (!balance.lastUpdated || now - balance.lastUpdated > 60000) {
+                needsRefresh = true
+              }
+            })
+
+            if (needsRefresh) {
+              refreshWalletBalances()
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cached balances:', error)
+      }
+    }
+
+    loadCachedBalances()
+  }, [])
+
+  // 保存余额数据到 localStorage
+  useEffect(() => {
+    if (Object.keys(walletBalances).length > 0) {
+      try {
+        localStorage.setItem('walletBalances', JSON.stringify(walletBalances))
+      } catch (error) {
+        console.error('Error saving wallet balances to cache:', error)
+      }
+    }
+  }, [walletBalances])
+
+  const shouldRefreshBalance = (wallet: Wallet, balance?: WalletBalance) => {
+    if (!balance) return true;
+    if (wallet.type === 'StarkNet') return false;
+    
+    const now = Date.now();
+    const oneMinute = 60 * 1000;
+    
+    return (
+      Number(balance.value) === 0 ||
+      now - balance.lastUpdated > oneMinute
+    );
+  }
+
+  const refreshWalletBalances = async (forcedRefresh = false) => {
+    setIsRefreshing(true)
+    const newBalances = { ...walletBalances }
+    let hasChanges = false
+    
+    for (const wallet of wallets) {
+      const currentBalance = walletBalances[wallet.address]
+      
+      if (forcedRefresh || shouldRefreshBalance(wallet, currentBalance)) {
+        try {
+          const value = await getCachedTotalValue(wallet.address, '1')
+          newBalances[wallet.address] = {
+            value: value.totalValue,
+            lastUpdated: Date.now()
+          }
+          hasChanges = true
+        } catch (error) {
+          console.error(`Error loading balance for ${wallet.address}:`, error)
+          if (!currentBalance) {
+            newBalances[wallet.address] = {
+              value: '0',
+              lastUpdated: Date.now()
+            }
+            hasChanges = true
+          }
+        }
+      }
+    }
+    
+    if (hasChanges) {
+      setWalletBalances(newBalances)
+      try {
+        localStorage.setItem('walletBalances', JSON.stringify(newBalances))
+      } catch (error) {
+        console.error('Error saving updated balances to cache:', error)
+      }
+    }
+    
+    setIsRefreshing(false)
+  }
+
   useEffect(() => {
     const loadData = async () => {
       const savedWallets = await walletStorageIndexedDB.getWallets()
@@ -51,6 +160,10 @@ export default function WalletManager() {
     }
     loadData()
   }, [])
+
+  useEffect(() => {
+    refreshWalletBalances()
+  }, [wallets])
 
   const addWallet = async () => {
     if (newWalletAddress.trim() && newWalletType) {
@@ -182,7 +295,16 @@ export default function WalletManager() {
 
   return (
     <div className="bg-yellow-100 rounded-lg p-6 shadow-lg relative">
-      <h2 className="text-2xl font-bold mb-4 text-yellow-800">钱包管理</h2>
+      <h2 className="text-2xl font-bold mb-4 text-yellow-800 flex justify-between items-center">
+        钱包管理
+        <button
+          onClick={() => refreshWalletBalances(true)}
+          className={`text-yellow-600 hover:text-yellow-800 p-1 ${isRefreshing ? 'animate-spin' : ''}`}
+          disabled={isRefreshing}
+        >
+          <RefreshCw size={20} />
+        </button>
+      </h2>
       
       {/* 搜索框 */}
       <div className="mb-4">
@@ -243,42 +365,49 @@ export default function WalletManager() {
         {currentWallets.length > 0 ? (
           currentWallets.map((wallet, index) => (
             <div key={index} className="mb-4 p-4 bg-yellow-200 rounded-md relative">
-              <div className="flex justify-between items-start mb-2">
+              <div className="flex justify-between items-start">
                 <div>
-                  <span className="text-yellow-800 font-semibold block mb-1">{getWalletDisplayName(wallet)}</span>
-                  <span className="text-sm text-yellow-600 block">{wallet.address}</span>
-                  <span className="bg-yellow-400 px-2 py-1 rounded-full text-xs text-yellow-800">{wallet.type}</span>
+                  <h3 className="text-lg font-semibold text-yellow-800">{getWalletDisplayName(wallet)}</h3>
+                  <p className="text-yellow-700">{wallet.address}</p>
+                  {wallet.twitter && <p className="text-yellow-700">Twitter: {wallet.twitter}</p>}
+                  {wallet.email && <p className="text-yellow-700">Email: {wallet.email}</p>}
+                  <div className="mt-2">
+                    <span className="bg-yellow-300 px-2 py-1 rounded text-yellow-800 text-sm">
+                      {wallet.type}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <Link href={`/wallets/${wallet.address}`}>
+                      <span className="text-xl font-bold text-blue-500 hover:text-blue-700 cursor-pointer">
+                        ${Number(walletBalances[wallet.address]?.value || '0').toFixed(2)} →
+                      </span>
+                    </Link>
+                  </div>
+                  <div className="mt-2">
+                    {getRelatedProjects(wallet.address).map((project) => (
+                      <button
+                        key={project.id}
+                        onClick={() => openProjectDetails(project)}
+                        className="mr-2 mb-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 text-sm px-2 py-1 rounded-full"
+                      >
+                        {project.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex space-x-2">
+                  <Link href={`/wallets/${wallet.address}`}>
+                    <button className="text-yellow-600 hover:text-yellow-800 p-1">
+                      <Info size={24} />
+                    </button>
+                  </Link>
                   <button onClick={() => editWallet(wallet)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                    <Edit2 size={20} />
+                    <Edit2 size={24} />
                   </button>
                   <button onClick={() => deleteWallet(wallet.address)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                    <Trash2 size={20} />
+                    <Trash2 size={24} />
                   </button>
                 </div>
-              </div>
-              {wallet.twitter && <p className="text-sm text-yellow-600 mt-2">Twitter: {wallet.twitter}</p>}
-              {wallet.email && <p className="text-sm text-yellow-600">Email: {wallet.email}</p>}
-              <a 
-                href={getAssetLink(wallet)} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="block mt-2 text-xl font-bold text-blue-500 hover:text-blue-700"
-              >
-                --
-              </a>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {getRelatedProjects(wallet.address).map((project) => (
-                  <button
-                    key={project.id}
-                    onClick={() => openProjectDetails(project)}
-                    className="bg-yellow-300 text-yellow-800 px-2 py-1 rounded-full text-sm flex items-center"
-                  >
-                    {project.name}
-                    <Info size={14} className="ml-1" />
-                  </button>
-                ))}
               </div>
             </div>
           ))
@@ -512,7 +641,7 @@ export default function WalletManager() {
                   <p className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800">{selectedProject.stage}</p>
                 </div>
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2">空投阶段</label>
+                  <label className="block text-yellow-700 text-sm font-bold mb-2">投阶段</label>
                   <p className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800">{selectedProject.airdropStage}</p>
                 </div>
               </div>
