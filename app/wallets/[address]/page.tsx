@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { Wallet, Project } from '../../data/model'
 import { walletStorageIndexedDB, projectStorageIndexedDB } from '../../utils/storage-db'
 import { getAllTokenBalances, getChainName } from '../../utils/api_okx'
+import { ExternalLink, Copy, ArrowLeft } from 'lucide-react'
+import Card from '../../components/Card'
 
 interface TokenBalance {
   chainIndex: string;
@@ -17,6 +19,7 @@ interface TokenBalance {
 }
 
 export default function WalletDetailsPage() {
+  const router = useRouter()
   const params = useParams()
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const [relatedProjects, setRelatedProjects] = useState<Project[]>([])
@@ -105,109 +108,139 @@ export default function WalletDetailsPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">钱包详情</h1>
+    <div className="container mx-auto p-4 space-y-6">
+      {/* 返回按钮和标题 */}
+      <div className="flex items-center space-x-4 mb-4">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center text-gray-600 hover:text-primary-600 transition-colors"
+        >
+          <ArrowLeft size={20} className="mr-1" />
+          返回
+        </button>
+        <h1 className="text-2xl font-bold text-gray-900">钱包详情</h1>
+      </div>
 
-      {/* 钱包基本信息 */}
-      <div className="bg-yellow-100 rounded-lg p-4 mb-6">
-        <h2 className="text-xl font-semibold mb-4">基本信息</h2>
-        <div className="grid grid-cols-2 gap-4">
+      {/* 基本信息卡片 */}
+      <Card title="基本信息">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <p className="font-bold">地址：</p>
-            <p className="break-all">{wallet.address}</p>
+            <h3 className="text-sm font-medium text-gray-500 mb-1">地址</h3>
+            <div className="flex items-center space-x-2">
+              <p className="text-gray-900 font-mono">{wallet?.address}</p>
+              <button
+                onClick={() => navigator.clipboard.writeText(wallet?.address || '')}
+                className="text-gray-400 hover:text-primary-600 transition-colors"
+              >
+                <Copy size={16} />
+              </button>
+            </div>
           </div>
           <div>
-            <p className="font-bold">类型：</p>
-            <p>{wallet.type}</p>
+            <h3 className="text-sm font-medium text-gray-500 mb-1">类型</h3>
+            <p className="text-gray-900">{wallet?.type}</p>
           </div>
-          {wallet.alias && (
+          {wallet?.alias && (
             <div>
-              <p className="font-bold">别名：</p>
-              <p>{wallet.alias}</p>
+              <h3 className="text-sm font-medium text-gray-500 mb-1">别名</h3>
+              <p className="text-gray-900">{wallet.alias}</p>
             </div>
           )}
-          {wallet.twitter && (
+          {wallet?.twitter && (
             <div>
-              <p className="font-bold">Twitter：</p>
-              <p>{wallet.twitter}</p>
+              <h3 className="text-sm font-medium text-gray-500 mb-1">Twitter</h3>
+              <p className="text-gray-900">{wallet.twitter}</p>
             </div>
           )}
-          {wallet.email && (
+          {wallet?.email && (
             <div>
-              <p className="font-bold">邮箱：</p>
-              <p>{wallet.email}</p>
+              <h3 className="text-sm font-medium text-gray-500 mb-1">邮箱</h3>
+              <p className="text-gray-900">{wallet.email}</p>
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
-      {/* 关联项目 */}
-      <div className="bg-yellow-100 rounded-lg p-4 mb-6">
-        <h2 className="text-xl font-semibold mb-4">关联项目</h2>
+      {/* 关联项目卡片 */}
+      <Card title="关联项目">
         {isLoadingProjects ? (
-          <p>加载项目中...</p>
+          <p className="text-gray-500">加载项目中...</p>
         ) : relatedProjects.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {relatedProjects.map(project => (
-              <div key={project.id} className="bg-yellow-50 p-3 rounded">
-                <h3 className="font-bold">{project.name}</h3>
-                <p className="text-sm">{project.description}</p>
+              <div key={project.id} className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-gray-900">{project.name}</h3>
+                <p className="text-gray-600 text-sm mt-1">{project.description}</p>
+                {project.website && (
+                  <a
+                    href={project.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center mt-2 text-sm text-primary-600 hover:text-primary-700"
+                  >
+                    访问网站
+                    <ExternalLink size={14} className="ml-1" />
+                  </a>
+                )}
               </div>
             ))}
           </div>
         ) : (
-          <p>暂无关联项目</p>
+          <p className="text-gray-500">暂无关联项目</p>
         )}
-      </div>
+      </Card>
 
-      {/* 资产明细 */}
+      {/* 资产明细卡片 */}
       {wallet.type === 'EVM' ? (
-        <div className="bg-yellow-100 rounded-lg p-4">
-          <h2 className="text-xl font-semibold mb-4">资产明细</h2>
+        <Card title="资产明细">
           {isLoadingBalances ? (
-            <p>加载资产中...</p>
+            <p className="text-gray-500">加载资产中...</p>
           ) : tokenBalances.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="min-w-full">
+              <table className="min-w-full divide-y divide-gray-200">
                 <thead>
-                  <tr className="bg-yellow-200">
-                    <th className="px-4 py-2 text-left">代币</th>
-                    <th className="px-4 py-2 text-right">余额</th>
-                    <th className="px-4 py-2 text-right">价值 (USD)</th>
-                    <th className="px-4 py-2 text-left">网络</th>
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">代币</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">余额</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">价值 (USD)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">网络</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-200">
                   {tokenBalances.map((token, index) => (
-                    <tr key={index} className="border-b border-yellow-200 hover:bg-yellow-50">
-                      <td className="px-4 py-2 text-left">{token.symbol}</td>
-                      <td className="px-4 py-2 text-right font-mono">{Number(token.balance).toFixed(6)}</td>
-                      <td className="px-4 py-2 text-right font-mono">
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900">{token.symbol}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 text-right font-mono">
+                        {Number(token.balance).toFixed(6)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 text-right font-mono">
                         ${(Number(token.balance) * Number(token.tokenPrice)).toFixed(2)}
                       </td>
-                      <td className="px-4 py-2 text-left">{getChainName(token.chainIndex)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{getChainName(token.chainIndex)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p>暂无资产</p>
+            <p className="text-gray-500">暂无资产</p>
           )}
-        </div>
+        </Card>
       ) : (
-        <div className="bg-yellow-100 rounded-lg p-4">
-          <h2 className="text-xl font-semibold mb-4">资产明细</h2>
-          <p className="text-gray-600">StarkNet 钱包暂不支持资产查询</p>
-          <a 
-            href={`https://starkscan.co/contract/${wallet.address}`} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="text-blue-500 hover:text-blue-700 mt-2 inline-block"
-          >
-            在 Starkscan 上查看 →
-          </a>
-        </div>
+        <Card title="资产明细">
+          <div className="text-gray-500">
+            <p>StarkNet 钱包暂不支持资产查询</p>
+            <a 
+              href={`https://starkscan.co/contract/${wallet.address}`} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="inline-flex items-center mt-2 text-primary-600 hover:text-primary-700"
+            >
+              在 Starkscan 上查看
+              <ExternalLink size={14} className="ml-1" />
+            </a>
+          </div>
+        </Card>
       )}
     </div>
   )

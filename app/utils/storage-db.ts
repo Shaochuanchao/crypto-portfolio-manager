@@ -39,15 +39,21 @@ const DB_VERSION = 2;
 async function getDB(): Promise<IDBPDatabase<MyDB>> {
   return openDB<MyDB>(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion, newVersion, transaction) {
+      if (db.objectStoreNames.contains('subTasks')) {
+        db.deleteObjectStore('subTasks');
+      }
+
       if (oldVersion < 1) {
-        db.createObjectStore('wallets',{keyPath:'address'});
+        db.createObjectStore('wallets', { keyPath: 'address' });
         db.createObjectStore('walletTypes');
         db.createObjectStore('projects', { keyPath: 'id' });
-        db.createObjectStore('tasks',{keyPath:'id'});
-        const subTaskStore = db.createObjectStore('subTasks', { keyPath: 'id' });
-        subTaskStore.createIndex('by-taskId', 'taskId');
+        db.createObjectStore('tasks', { keyPath: 'id' });
         db.createObjectStore('chains', { keyPath: 'chainIndex' });
       }
+
+      const subTaskStore = db.createObjectStore('subTasks', { keyPath: 'id' });
+      subTaskStore.createIndex('by-taskId', 'taskId');
+
       if (oldVersion < 2) {
         if (!db.objectStoreNames.contains('notes')) {
           db.createObjectStore('notes', { keyPath: 'id' });
@@ -223,45 +229,67 @@ export const taskStorageIndexedDB = {
 export const subTaskStorageIndexedDB = {
   async getSubTasks(taskId: string): Promise<SubTask[]> {
     const db = await getDB();
-    const subTasks = await db.getAllFromIndex('subTasks', 'by-taskId', taskId);
-    console.log('Retrieved subTasks:', subTasks);
-    return subTasks;
-  },
-
-  async saveSubTasks(taskId: string, subTasks: SubTask[]): Promise<void> {
-    console.log('Saving subTasks:', subTasks);
-    const db = await getDB();
-    const tx = db.transaction('subTasks', 'readwrite');
-    const store = tx.objectStore('subTasks');
-
-    for (const subTask of subTasks) {
-      if (!subTask.id) {
-        subTask.id = generateUniqueId();
-        console.log('Generated ID for subTask:', subTask.id);
-      }
-      subTask.taskId = taskId;
-      await store.put(subTask);
+    try {
+      console.log('Getting subtasks for taskId:', taskId);
+      const subTasks = await db.getAllFromIndex('subTasks', 'by-taskId', taskId);
+      console.log('Retrieved subtasks:', subTasks);
+      return subTasks || [];
+    } catch (error) {
+      console.error('Error getting subtasks:', error);
+      return [];
     }
-
-    await tx.done;
-    console.log('Finished saving subTasks');
   },
 
   async saveSubTask(subTask: SubTask): Promise<void> {
-    console.log('Saving single subTask:', subTask);
+    console.log('Saving subtask:', subTask);
     if (!subTask.id) {
       subTask.id = generateUniqueId();
-      console.log('Generated ID:', subTask.id);
     }
     const db = await getDB();
-    await db.put('subTasks', subTask);
+    try {
+      if (!subTask.taskId) {
+        throw new Error('SubTask must have a taskId');
+      }
+      await db.put('subTasks', subTask);
+      console.log('Successfully saved subtask:', subTask);
+      
+      const savedSubTask = await db.get('subTasks', subTask.id);
+      console.log('Verified saved subtask:', savedSubTask);
+    } catch (error) {
+      console.error('Error saving subtask:', error);
+      throw error;
+    }
   },
 
   async deleteSubTask(id: string): Promise<void> {
-    console.log(`Deleting subTask with ID: ${id}`);
+    console.log('Deleting subtask:', id);
     const db = await getDB();
-    await db.delete('subTasks', id);
+    try {
+      await db.delete('subTasks', id);
+      console.log('Successfully deleted subtask:', id);
+    } catch (error) {
+      console.error('Error deleting subtask:', error);
+      throw error;
+    }
   },
+
+  async deleteAllSubTasks(taskId: string): Promise<void> {
+    console.log('Deleting all subtasks for task:', taskId);
+    const db = await getDB();
+    try {
+      const subTasks = await db.getAllFromIndex('subTasks', 'by-taskId', taskId);
+      console.log('Found subtasks to delete:', subTasks);
+      const tx = db.transaction('subTasks', 'readwrite');
+      await Promise.all([
+        ...subTasks.map(subTask => tx.store.delete(subTask.id)),
+        tx.done
+      ]);
+      console.log('Successfully deleted all subtasks for task:', taskId);
+    } catch (error) {
+      console.error('Error deleting subtasks:', error);
+      throw error;
+    }
+  }
 };
 
 export const chainStorageIndexedDB = {

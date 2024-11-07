@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { Project, Task, SubTask } from '../data/model'
 import { projectStorageIndexedDB, taskStorageIndexedDB, subTaskStorageIndexedDB } from '../utils/storage-db'
-import { PlusCircle, Edit, Trash2, List, Plus, CheckSquare, Star, ChevronLeft, ChevronRight } from 'lucide-react'
-import { truncateString } from '../utils/helpers'; // 假设我们在 utils 文件夹中创建了这个辅助函数
+import { PlusCircle, Edit, Trash2, List, Plus, CheckSquare, Star, ChevronLeft, ChevronRight, Search, ExternalLink, X, Edit2 } from 'lucide-react'
+import { truncateString, generateUniqueId } from '../utils/helpers'; // 假设我们在 utils 文件夹中创建了这个辅助函数
+import TaskCard from './TaskCard'
 
 export default function TaskManager() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -49,11 +50,25 @@ export default function TaskManager() {
   const [currentPage, setCurrentPage] = useState(1)
   const tasksPerPage = 10
 
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [subTaskCounts, setSubTaskCounts] = useState<{ [taskId: string]: number }>({})
+
+  // 加载子任务数量
+  const loadSubTaskCounts = async (tasks: Task[]) => {
+    const counts: { [taskId: string]: number } = {}
+    for (const task of tasks) {
+      const subTasks = await subTaskStorageIndexedDB.getSubTasks(task.id)
+      counts[task.id] = subTasks.length
+    }
+    setSubTaskCounts(counts)
+  }
+
   useEffect(() => {
     const loadData = async () => {
       setProjects(await projectStorageIndexedDB.getProjects())
       const loadedTasks = await taskStorageIndexedDB.getTasks()
       setTasks(loadedTasks)
+      await loadSubTaskCounts(loadedTasks)
       
       // 加载已完成任务
       const storedCompletedTasks = localStorage.getItem('completedTasks')
@@ -139,50 +154,59 @@ export default function TaskManager() {
   }
 
   const editTask = (task: Task) => {
-    setNewTask(task)
-    setShowAddTask(true)
-  }
+    setEditingTask(task);
+    setNewTask(task);
+    setShowAddTask(true);
+  };
 
   const updateTask = async () => {
-    if (newTask.name && newTask.projectId) {
-      await taskStorageIndexedDB.saveTask(newTask)
-      const updatedTasks = await taskStorageIndexedDB.getTasks()
-      setTasks(updatedTasks)
-      setShowAddTask(false)
-      setNewTask({
-        id: '',
-        name: '',
-        projectId: '',
-        startDate: '',
-        endDate: '',
-        guideLink: '',
-        description: '',
-        isDaily: activeTab === 'daily',
-        subTaskCount: 0,
-        isDeleted: false,
-        createdAt: new Date().toISOString(),
-        priority: 5,
-        priorityNote: '',
-      })
-    } else {
-      alert('任务名称和关联项目不能为空！')
+    if (editingTask && newTask.name.trim()) {
+      const updatedTask = {
+        ...editingTask,
+        ...newTask,
+        updatedAt: new Date().toISOString()
+      };
+      await taskStorageIndexedDB.saveTask(updatedTask);
+      const updatedTasks = await taskStorageIndexedDB.getTasks();
+      setTasks(updatedTasks);
+      setShowAddTask(false);
+      setEditingTask(null);
+      resetNewTask();
     }
-  }
+  };
 
   const deleteTask = async (taskId: string) => {
     if (confirm('确定要删除这个任务吗？')) {
-      const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, isDeleted: true } : t)
-      setTasks(updatedTasks)
-      await taskStorageIndexedDB.saveTasks(updatedTasks)
+      try {
+        // 先删除所有子任务
+        await subTaskStorageIndexedDB.deleteAllSubTasks(taskId);
+        // 再删除任务
+        const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, isDeleted: true } : t);
+        setTasks(updatedTasks);
+        await taskStorageIndexedDB.saveTasks(updatedTasks);
+      } catch (error) {
+        console.error('Error deleting task and subtasks:', error);
+      }
     }
-  }
+  };
 
   const openSubTasks = async (task: Task) => {
-    setSelectedTask(task)
-    const loadedSubTasks = await subTaskStorageIndexedDB.getSubTasks(task.id)
-    setSubTasks(loadedSubTasks)
-    setShowSubTasks(true)
-  }
+    console.log('Opening subtasks for task:', task);
+    setSelectedTask(task);
+    try {
+      const loadedSubTasks = await subTaskStorageIndexedDB.getSubTasks(task.id);
+      console.log('Loaded subtasks:', loadedSubTasks);
+      setSubTasks(loadedSubTasks);
+      setSubTaskCounts(prev => ({
+        ...prev,
+        [task.id]: loadedSubTasks.length
+      }));
+      setShowSubTasks(true);
+    } catch (error) {
+      console.error('Error loading subtasks:', error);
+      setSubTasks([]);
+    }
+  };
 
   const openAddSubTask = (task: Task) => {
     setSelectedTask(task)
@@ -215,19 +239,32 @@ export default function TaskManager() {
 
   const addSubTask = async () => {
     if (newSubTask.name && selectedTask) {
-      const subTaskToAdd = { ...newSubTask, id: Date.now().toString(), taskId: selectedTask.id }
-      await subTaskStorageIndexedDB.saveSubTask(subTaskToAdd)
-      const updatedSubTasks = await subTaskStorageIndexedDB.getSubTasks(selectedTask.id)
-      setSubTasks(updatedSubTasks)
-      setShowAddSubTask(false)
-      
-      // Update the subTaskCount of the parent task
-      const updatedTask = { ...selectedTask, subTaskCount: updatedSubTasks.length }
-      const updatedTasks = tasks.map(t => t.id === selectedTask.id ? updatedTask : t)
-      setTasks(updatedTasks)
-      await taskStorageIndexedDB.saveTask(updatedTask)
+      const subTaskToAdd = {
+        ...newSubTask,
+        id: generateUniqueId(),
+        taskId: selectedTask.id
+      };
+
+      try {
+        await subTaskStorageIndexedDB.saveSubTask(subTaskToAdd);
+        // 重新加载子任务列表
+        const updatedSubTasks = await subTaskStorageIndexedDB.getSubTasks(selectedTask.id);
+        setSubTasks(updatedSubTasks);
+        
+        // 重置表单
+        setShowAddSubTask(false);
+        setNewSubTask({
+          id: '',
+          taskId: selectedTask.id,
+          name: '',
+          description: '',
+          guideLink: ''
+        });
+      } catch (error) {
+        console.error('Error saving subtask:', error);
+      }
     }
-  }
+  };
 
   const editSubTask = (subTask: SubTask) => {
     setEditingSubTask(subTask)
@@ -236,27 +273,40 @@ export default function TaskManager() {
 
   const updateSubTask = async () => {
     if (editingSubTask && selectedTask) {
-      await subTaskStorageIndexedDB.saveSubTask(editingSubTask)
-      const updatedSubTasks = await subTaskStorageIndexedDB.getSubTasks(selectedTask.id)
-      setSubTasks(updatedSubTasks)
-      setShowEditSubTask(false)
-      setEditingSubTask(null)
+      try {
+        await subTaskStorageIndexedDB.saveSubTask(newSubTask);
+        // 重新加载子任务列表
+        const updatedSubTasks = await subTaskStorageIndexedDB.getSubTasks(selectedTask.id);
+        setSubTasks(updatedSubTasks);
+        
+        // 重置表单
+        setShowAddSubTask(false);
+        setEditingSubTask(null);
+        setNewSubTask({
+          id: '',
+          taskId: selectedTask.id,
+          name: '',
+          description: '',
+          guideLink: ''
+        });
+      } catch (error) {
+        console.error('Error updating subtask:', error);
+      }
     }
-  }
+  };
 
   const deleteSubTask = async (subTaskId: string) => {
     if (selectedTask && confirm('确定要删除这个子任务吗？')) {
-      await subTaskStorageIndexedDB.deleteSubTask(subTaskId)
-      const updatedSubTasks = await subTaskStorageIndexedDB.getSubTasks(selectedTask.id)
-      setSubTasks(updatedSubTasks)
-
-      // 更新父任务的子任务计数
-      const updatedTask = { ...selectedTask, subTaskCount: updatedSubTasks.length }
-      const updatedTasks = tasks.map(t => t.id === selectedTask.id ? updatedTask : t)
-      setTasks(updatedTasks)
-      await taskStorageIndexedDB.saveTask(updatedTask)
+      try {
+        await subTaskStorageIndexedDB.deleteSubTask(subTaskId);
+        // 重新加载子任务列表
+        const updatedSubTasks = await subTaskStorageIndexedDB.getSubTasks(selectedTask.id);
+        setSubTasks(updatedSubTasks);
+      } catch (error) {
+        console.error('Error deleting subtask:', error);
+      }
     }
-  }
+  };
 
   const toggleTaskCompletion = (taskId: string) => {
     const today = new Date().toISOString().split('T')[0]
@@ -313,158 +363,109 @@ export default function TaskManager() {
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
 
+  const resetNewTask = () => {
+    setNewTask({
+      id: '',
+      name: '',
+      projectId: '',
+      startDate: '',
+      endDate: '',
+      guideLink: '',
+      description: '',
+      isDaily: true,
+      subTaskCount: 0,
+      isDeleted: false,
+      createdAt: '',
+      priority: 5,
+      priorityNote: ''
+    });
+  };
+
   return (
-    <div className="bg-yellow-100 rounded-lg p-6 shadow-lg relative">
-      <h2 className="text-2xl font-bold mb-4 text-yellow-800">任务管理</h2>
-      
-      {/* 搜索框 */}
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="搜索任务..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-        />
-      </div>
+    <div className="space-y-6">
+      {/* 顶部操作栏 */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center space-x-4">
+          {/* 搜索框 */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="搜索任务..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+          </div>
 
-      <div className="mb-4">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`mr-2 px-4 py-2 rounded ${activeTab === 'all' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'}`}
-        >
-          所有任务
-        </button>
-        <button
-          onClick={() => setActiveTab('daily')}
-          className={`mr-2 px-4 py-2 rounded ${activeTab === 'daily' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'}`}
-        >
-          每日任务
-        </button>
-        <button
-          onClick={() => setActiveTab('oneTime')}
-          className={`mr-2 px-4 py-2 rounded ${activeTab === 'oneTime' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'}`}
-        >
-          一次性任务
-        </button>
-        <button
-          onClick={() => setActiveTab('useless')}
-          className={`px-4 py-2 rounded ${activeTab === 'useless' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'}`}
-        >
-          鸡肋任务
-        </button>
-      </div>
+          {/* 任务类型切换 */}
+          <div className="flex space-x-2">
+            {['all', 'daily', 'oneTime', 'useless'].map((type) => (
+              <button
+                key={type}
+                onClick={() => setActiveTab(type as any)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  activeTab === type
+                    ? 'bg-primary-100 text-primary-700 border border-primary-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {type === 'all' ? '所有任务' :
+                 type === 'daily' ? '每日任务' :
+                 type === 'oneTime' ? '一次性任务' : '鸡肋任务'}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {/* 添加任务按钮 */}
-      <div className="absolute top-6 right-6">
-        <button 
+        {/* 添加任务按钮 */}
+        <button
           onClick={() => setShowAddTask(true)}
-          className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold p-2 rounded-full"
+          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
         >
-          <PlusCircle size={24} />
+          添加任务
         </button>
       </div>
 
-      <div className="bg-yellow-50 rounded-md p-4">
-        {currentTasks.map((task) => {
-          const isCompleted = isTaskCompleted(task.id)
-          return (
-            <div 
-              key={task.id} 
-              className={`mb-4 p-4 rounded-md relative ${
-                isCompleted ? 'bg-gray-200' : 'bg-yellow-200'
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex items-center">
-                  <button
-                    onClick={() => toggleTaskCompletion(task.id)}
-                    className={`mr-2 p-1 rounded ${
-                      isCompleted ? 'bg-gray-400' : 'bg-yellow-400'
-                    }`}
-                  >
-                    <CheckSquare size={20} className={isCompleted ? 'text-white' : 'text-yellow-800'} />
-                  </button>
-                  <div>
-                    <h3 className={`text-xl font-bold ${isCompleted ? 'text-gray-600' : 'text-yellow-800'}`}>
-                      {task.name}
-                    </h3>
-                    <div className="flex items-center mt-1">
-                      {renderPriorityStars(task.priority)}
-                      {task.priorityNote && (
-                        <span className="ml-2 text-sm text-gray-600">{task.priorityNote}</span>
-                      )}
-                    </div>
-                    <p className={isCompleted ? 'text-gray-500' : 'text-yellow-700'}>
-                      项目: 
-                      <button 
-                        onClick={() => openProjectDetails(task.projectId)}
-                        className="text-blue-500 hover:text-blue-700 underline ml-1"
-                      >
-                        {projects.find(p => p.id === task.projectId)?.name}
-                      </button>
-                    </p>
-                    <p className={isCompleted ? 'text-gray-500' : 'text-yellow-700'}>开始时间: {task.startDate}</p>
-                    <p className={isCompleted ? 'text-gray-500' : 'text-yellow-700'}>结束时间: {task.endDate}</p>
-                    <p className={isCompleted ? 'text-gray-500' : 'text-yellow-700'}>说明: {task.description}</p>
-                    <a 
-                      href={task.guideLink} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="text-blue-500 hover:text-blue-700 block overflow-hidden text-ellipsis"
-                      title={task.guideLink}
-                    >
-                      {truncateString(task.guideLink, 50)}
-                    </a>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <button onClick={() => editTask(task)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                    <Edit size={24} />
-                  </button>
-                  <button onClick={() => deleteTask(task.id)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                    <Trash2 size={24} />
-                  </button>
-                </div>
-              </div>
-              <div className="absolute bottom-2 right-2 flex space-x-2">
-                <button
-                  onClick={() => openSubTasks(task)}
-                  className="bg-yellow-400 hover:bg-yellow-500 text-yellow-800 font-bold py-1 px-2 rounded flex items-center"
-                >
-                  <List size={16} className="mr-1" />
-                  子任务 ({task.subTaskCount})
-                </button>
-                <button
-                  onClick={() => openAddSubTask(task)}
-                  className="bg-yellow-400 hover:bg-yellow-500 text-yellow-800 font-bold py-1 px-2 rounded flex items-center"
-                >
-                  <Plus size={16} className="mr-1" />
-                  添加子任务
-                </button>
-              </div>
-            </div>
-          )
-        })}
+      {/* 任务列表 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {currentTasks.map((task) => (
+          <TaskCard
+            key={task.id}
+            task={task}
+            isCompleted={isTaskCompleted(task.id)}
+            onEdit={editTask}
+            onDelete={deleteTask}
+            onToggleCompletion={toggleTaskCompletion}
+            onShowSubTasks={openSubTasks}
+            getProjectName={(projectId) => {
+              const project = projects.find(p => p.id === projectId)
+              return project ? project.name : '未关联项目'
+            }}
+            subTaskCount={subTaskCounts[task.id] || 0}
+          />
+        ))}
       </div>
 
-      {/* 分页控件 */}
+      {/* 分页控件 - 统一风格 */}
       {sortedTasks.length > 0 && (
-        <div className="mt-4 flex justify-center">
+        <div className="flex justify-center items-center space-x-4">
           <button
             onClick={() => paginate(currentPage - 1)}
             disabled={currentPage === 1}
-            className="mr-2 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded disabled:opacity-50"
+            className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 disabled:opacity-50 disabled:hover:bg-primary-100 transition-colors"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={20} />
           </button>
-          <span className="mx-2 py-2">{currentPage} / {totalPages}</span>
+          <span className="text-gray-700 font-medium">
+            第 {currentPage} 页，共 {totalPages} 页
+          </span>
           <button
             onClick={() => paginate(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="ml-2 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded disabled:opacity-50"
+            className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 disabled:opacity-50 disabled:hover:bg-primary-100 transition-colors"
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={20} />
           </button>
         </div>
       )}
@@ -472,133 +473,186 @@ export default function TaskManager() {
       {/* 添加/编辑任务模态框 */}
       {showAddTask && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-          <div className="bg-yellow-100 p-6 rounded-lg w-3/4 max-w-4xl my-8">
-            <h3 className="text-xl font-bold mb-4 text-yellow-800">{newTask.id ? '编辑任务' : '添加任务'}</h3>
-            <div className="grid grid-cols-1 gap-4">
+          <div className="bg-white p-6 rounded-lg w-3/4 max-w-4xl my-8 shadow-xl">
+            <h3 className="text-lg font-medium text-gray-900 mb-6">
+              {editingTask ? '编辑任务' : '新增任务'}
+            </h3>
+            <div className="grid grid-cols-1 gap-6">
+              {/* 基本信息 */}
               <div>
-                <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="task-name">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   任务名称
                 </label>
                 <input
-                  id="task-name"
                   type="text"
                   placeholder="任务名称"
                   value={newTask.name}
                   onChange={(e) => setNewTask({...newTask, name: e.target.value})}
-                  className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
                 />
               </div>
+
+              {/* 任务描述 */}
               <div>
-                <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="task-project">
-                  关联项目
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  任务描述
                 </label>
-                <select
-                  id="task-project"
-                  value={newTask.projectId}
-                  onChange={(e) => setNewTask({...newTask, projectId: e.target.value})}
-                  className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 border border-yellow-300"
-                >
-                  <option value="">选择项目</option>
-                  {projects.map(project => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
-                  ))}
-                </select>
+                <textarea
+                  placeholder="任务描述"
+                  value={newTask.description}
+                  onChange={(e) => setNewTask({...newTask, description: e.target.value})}
+                  className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
               </div>
+
+              {/* 关联项目和任务类型 */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="task-start-date">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    关联项目
+                  </label>
+                  <select
+                    value={newTask.projectId}
+                    onChange={(e) => setNewTask({...newTask, projectId: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white"
+                  >
+                    <option value="">选择项目</option>
+                    {projects.map(project => (
+                      <option key={project.id} value={project.id}>{project.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    任务类型
+                  </label>
+                  <div className="flex items-center space-x-4">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        checked={newTask.isDaily}
+                        onChange={() => setNewTask({...newTask, isDaily: true})}
+                        className="form-radio h-4 w-4 text-primary-600"
+                      />
+                      <span className="ml-2 text-gray-700">每日任务</span>
+                    </label>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        checked={!newTask.isDaily}
+                        onChange={() => setNewTask({...newTask, isDaily: false})}
+                        className="form-radio h-4 w-4 text-primary-600"
+                      />
+                      <span className="ml-2 text-gray-700">一次性任务</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* 时间设置 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     开始时间
                   </label>
                   <input
-                    id="task-start-date"
                     type="date"
                     value={newTask.startDate}
                     onChange={(e) => setNewTask({...newTask, startDate: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="task-end-date">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     结束时间
                   </label>
                   <input
-                    id="task-end-date"
                     type="date"
                     value={newTask.endDate}
                     onChange={(e) => setNewTask({...newTask, endDate: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white"
                   />
                 </div>
               </div>
+
+              {/* 优先级设置 */}
               <div>
-                <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="task-guide-link">
-                  任务攻略链接
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  优先级
                 </label>
-                <input
-                  id="task-guide-link"
-                  type="text"
-                  placeholder="任务攻略链接"
-                  value={newTask.guideLink}
-                  onChange={(e) => setNewTask({...newTask, guideLink: e.target.value})}
-                  className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-                />
-              </div>
-              <div>
-                <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="task-description">
-                  任务说明
-                </label>
-                <textarea
-                  id="task-description"
-                  placeholder="任务说明"
-                  value={newTask.description}
-                  onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-                  className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300 h-20"
-                />
-              </div>
-              <div className="flex items-center">
-                <input
-                  id="task-is-daily"
-                  type="checkbox"
-                  checked={newTask.isDaily}
-                  onChange={(e) => setNewTask({...newTask, isDaily: e.target.checked})}
-                  className="mr-2"
-                />
-                <label htmlFor="task-is-daily" className="text-yellow-800">每日任务</label>
-              </div>
-              <div>
-                <label className="block text-yellow-700 text-sm font-bold mb-2">优先级</label>
-                <div className="flex items-center">
-                  {[1, 2, 3, 4, 5].map((star) => (
+                <div className="flex items-center space-x-2 mb-2">
+                  {[1, 2, 3, 4, 5].map((priority) => (
                     <button
-                      key={star}
-                      onClick={() => setNewTask({...newTask, priority: star})}
-                      className="mr-1"
+                      key={priority}
+                      onClick={() => setNewTask({...newTask, priority})}
+                      className="focus:outline-none"
                     >
                       <Star
                         size={24}
-                        className={star <= (newTask.priority || 5) ? 'text-yellow-500 fill-yellow-500' : 'text-yellow-200'}
+                        className={`${
+                          priority <= newTask.priority
+                            ? 'text-primary-500 fill-primary-500'
+                            : 'text-gray-300'
+                        }`}
                       />
                     </button>
                   ))}
                 </div>
-              </div>
-              <div>
-                <label className="block text-yellow-700 text-sm font-bold mb-2">优先级备注</label>
                 <input
                   type="text"
-                  placeholder="优先级备注（可选）"
+                  placeholder="优先级备（可选）"
                   value={newTask.priorityNote}
                   onChange={(e) => setNewTask({...newTask, priorityNote: e.target.value})}
-                  className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
+              </div>
+
+              {/* 攻略链 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  攻略链接 (可选)
+                </label>
+                <input
+                  type="text"
+                  placeholder="攻略链接"
+                  value={newTask.guideLink}
+                  onChange={(e) => setNewTask({...newTask, guideLink: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
                 />
               </div>
             </div>
-            <div className="flex justify-end mt-4">
-              <button onClick={() => setShowAddTask(false)} className="mr-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded">
-                取消
+
+            {/* 底部按钮 */}
+            <div className="mt-6 flex justify-end space-x-3">
+              <button 
+                onClick={() => {
+                  setShowAddTask(false);
+                  setEditingTask(null);
+                  resetNewTask();
+                }} 
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                消
               </button>
-              <button onClick={newTask.id ? updateTask : addTask} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded">
-                {newTask.id ? '更新' : '添加'}
+              <button 
+                onClick={editingTask ? updateTask : addTask}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+              >
+                {editingTask ? '更新' : '添加'}
               </button>
             </div>
           </div>
@@ -608,75 +662,168 @@ export default function TaskManager() {
       {/* 子任务列表模态框 */}
       {showSubTasks && selectedTask && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-          <div className="bg-yellow-100 p-6 rounded-lg w-3/4 max-w-4xl my-8">
-            <h3 className="text-xl font-bold mb-4 text-yellow-800">子任务列表 - {selectedTask.name}</h3>
-            <div className="space-y-4">
-              {subTasks.map((subTask) => (
-                <div key={subTask.id} className="bg-yellow-200 p-4 rounded-md flex justify-between items-start">
-                  <div>
-                    <h4 className="font-bold">{subTask.name}</h4>
-                    <p>{subTask.description}</p>
-                    {subTask.guideLink && (
-                      <a href={subTask.guideLink} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700">
-                        任务攻略
-                      </a>
-                    )}
+          <div className="bg-white p-6 rounded-lg w-3/4 max-w-4xl my-8 shadow-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-medium text-gray-900">
+                子任务管理 - {selectedTask.name}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowSubTasks(false);
+                  setSelectedTask(null);
+                  setSubTasks([]); // 清空子任务列表
+                }}
+                className="text-gray-400 hover:text-gray-500 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* 子任务列表 */}
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+              {Array.isArray(subTasks) && subTasks.length > 0 ? (
+                subTasks.map((subTask) => (
+                  <div
+                    key={subTask.id}
+                    className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-primary-200 transition-colors"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h4 className="text-base font-medium text-gray-900">
+                          {subTask.name}
+                        </h4>
+                        {subTask.description && (
+                          <p className="mt-1 text-sm text-gray-500">
+                            {subTask.description}
+                          </p>
+                        )}
+                        {subTask.guideLink && (
+                          <a
+                            href={subTask.guideLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center text-sm text-primary-600 hover:text-primary-700"
+                          >
+                            <ExternalLink size={14} className="mr-1" />
+                            查看攻略
+                          </a>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            setEditingSubTask(subTask);
+                            setNewSubTask(subTask);
+                            setShowAddSubTask(true);
+                          }}
+                          className="text-gray-400 hover:text-primary-600 transition-colors"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => deleteSubTask(subTask.id)}
+                          className="text-gray-400 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex space-x-2">
-                    <button onClick={() => editSubTask(subTask)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                      <Edit size={20} />
+                ))
+              ) : (
+                <p className="text-center text-gray-500 py-4">暂无子任务</p>
+              )}
+            </div>
+
+            {/* 添加子任务按钮 */}
+            {!showAddSubTask && (
+              <button
+                onClick={() => setShowAddSubTask(true)}
+                className="mt-4 flex items-center px-4 py-2 text-primary-600 hover:text-primary-700 transition-colors"
+              >
+                <Plus size={20} className="mr-2" />
+                添加子任务
+              </button>
+            )}
+
+            {/* 添加/编辑子任务表单 */}
+            {showAddSubTask && (
+              <div className="mt-6 border-t border-gray-200 pt-6">
+                <h4 className="text-base font-medium text-gray-900 mb-4">
+                  {editingSubTask ? '编辑子任务' : '添加子任务'}
+                </h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      子任务名称
+                    </label>
+                    <input
+                      type="text"
+                      value={newSubTask.name}
+                      onChange={(e) => setNewSubTask({ ...newSubTask, name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                        focus:outline-none focus:ring-2 focus:ring-primary-500
+                        text-gray-900 bg-white placeholder-gray-400"
+                      placeholder="输入子任务名称"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      描述 (可选)
+                    </label>
+                    <textarea
+                      value={newSubTask.description}
+                      onChange={(e) => setNewSubTask({ ...newSubTask, description: e.target.value })}
+                      className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md 
+                        focus:outline-none focus:ring-2 focus:ring-primary-500
+                        text-gray-900 bg-white placeholder-gray-400"
+                      placeholder="输入子任务描述"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      攻略链接 (可选)
+                    </label>
+                    <input
+                      type="text"
+                      value={newSubTask.guideLink}
+                      onChange={(e) => setNewSubTask({ ...newSubTask, guideLink: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                        focus:outline-none focus:ring-2 focus:ring-primary-500
+                        text-gray-900 bg-white placeholder-gray-400"
+                      placeholder="输入攻略链接"
+                    />
+                  </div>
+
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      onClick={() => {
+                        setShowAddSubTask(false);
+                        setEditingSubTask(null);
+                        setNewSubTask({
+                          id: '',
+                          taskId: selectedTask.id,
+                          name: '',
+                          description: '',
+                          guideLink: ''
+                        });
+                      }}
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                    >
+                      取消
                     </button>
-                    <button onClick={() => deleteSubTask(subTask.id)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                      <Trash2 size={20} />
+                    <button
+                      onClick={editingSubTask ? updateSubTask : addSubTask}
+                      className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                    >
+                      {editingSubTask ? '更新' : '添加'}
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-            <div className="flex justify-end mt-4">
-              <button onClick={() => setShowSubTasks(false)} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded">
-                关闭
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 添加子任务模态框 */}
-      {showAddSubTask && selectedTask && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-          <div className="bg-yellow-100 p-6 rounded-lg w-3/4 max-w-4xl my-8">
-            <h3 className="text-xl font-bold mb-4 text-yellow-800">添加子任务 - {selectedTask.name}</h3>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="子任务名称"
-                value={newSubTask.name}
-                onChange={(e) => setNewSubTask({...newSubTask, name: e.target.value})}
-                className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-              />
-              <textarea
-                placeholder="子任务描述"
-                value={newSubTask.description}
-                onChange={(e) => setNewSubTask({...newSubTask, description: e.target.value})}
-                className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300 h-20"
-              />
-              <input
-                type="text"
-                placeholder="任务攻略链接"
-                value={newSubTask.guideLink}
-                onChange={(e) => setNewSubTask({...newSubTask, guideLink: e.target.value})}
-                className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-              />
-            </div>
-            <div className="flex justify-end mt-4">
-              <button onClick={() => setShowAddSubTask(false)} className="mr-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded">
-                取消
-              </button>
-              <button onClick={addSubTask} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded">
-                添加
-              </button>
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -780,7 +927,7 @@ export default function TaskManager() {
               />
               <input
                 type="text"
-                placeholder="任务攻略链接"
+                placeholder="任务攻链接"
                 value={editingSubTask.guideLink}
                 onChange={(e) => setEditingSubTask({...editingSubTask, guideLink: e.target.value})}
                 className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"

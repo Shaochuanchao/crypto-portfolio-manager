@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusCircle, Edit2, Trash2, Info, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { PlusCircle, Edit2, Trash2, Info, ChevronLeft, ChevronRight, Search, Twitter, Mail } from 'lucide-react'
 import Link from 'next/link'
 import { Wallet, Project } from '../data/model'
 import { walletStorageIndexedDB, projectStorageIndexedDB } from '../utils/storage-db'
 import { getCachedTotalValue } from '../utils/api_okx'
+import WalletCard from './WalletCard'
 
 interface WalletBalance {
   value: string;
@@ -230,7 +231,7 @@ export default function WalletManager() {
     setShowBulkAdd(false);
 
     if (uniqueNewAddresses.length > 0) {
-      alert(`成功添加 ${uniqueNewAddresses.length} 个新钱包`);
+      alert(`成功添加 ${uniqueNewAddresses.length} 个新钱`);
     }
   }
 
@@ -293,146 +294,94 @@ export default function WalletManager() {
     setShowProjectDetails(true)
   }
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('地址已复制到剪贴板')
+    }, (err) => {
+      console.error('无法复制文本: ', err)
+    })
+  }
+
   return (
-    <div className="bg-yellow-100 rounded-lg p-6 shadow-lg relative">
-      <h2 className="text-2xl font-bold mb-4 text-yellow-800 flex justify-between items-center">
-        钱包管理
-        <button
-          onClick={() => refreshWalletBalances(true)}
-          className={`text-yellow-600 hover:text-yellow-800 p-1 ${isRefreshing ? 'animate-spin' : ''}`}
-          disabled={isRefreshing}
-        >
-          <RefreshCw size={20} />
-        </button>
-      </h2>
-      
-      {/* 搜索框 */}
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="搜索钱包地址或别名"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-        />
-      </div>
+    <div className="space-y-6">
+      {/* 顶部操作栏 */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center space-x-4">
+          {/* 搜索框 */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="搜索钱包..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+          </div>
+          
+          {/* 钱包类型筛选 */}
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-4 py-2 bg-primary-100 border border-primary-200 text-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-medium"
+          >
+            <option value="All">所有类型</option>
+            {walletTypes.map(type => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+        </div>
 
-      {/* 气泡选择 */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          onClick={() => setFilterType('All')}
-          className={`px-3 py-1 rounded-full text-sm ${
-            filterType === 'All' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'
-          }`}
-        >
-          所有类型
-        </button>
-        {walletTypes.map(type => (
+        {/* 添加钱包按钮 */}
+        <div className="flex space-x-2">
           <button
-            key={type}
-            onClick={() => setFilterType(type)}
-            className={`px-3 py-1 rounded-full text-sm ${
-              filterType === type ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'
-            }`}
+            onClick={() => setShowBulkAdd(true)}
+            className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors"
           >
-            {type}
+            批量导入
           </button>
-        ))}
-      </div>
-
-      {/* 添加钱包按钮 */}
-      <div className="absolute top-6 right-6">
-        <div className="relative">
-          <button 
-            onClick={() => setShowDropdown(!showDropdown)} 
-            onBlur={() => setTimeout(() => setShowDropdown(false), 100)}
-            className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold p-2 rounded-full"
+          <button
+            onClick={() => setShowAddWallet(true)}
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
-            <PlusCircle size={24} />
+            添加钱包
           </button>
-          {showDropdown && (
-            <div className="absolute right-0 mt-2 w-48 bg-yellow-100 rounded-md shadow-lg z-10">
-              <button onClick={() => { setShowAddWallet(true); setShowDropdown(false); }} className="block px-4 py-2 text-sm text-yellow-800 hover:bg-yellow-200 w-full text-left">新增钱包</button>
-              <button onClick={() => { setShowBulkAdd(true); setShowDropdown(false); }} className="block px-4 py-2 text-sm text-yellow-800 hover:bg-yellow-200 w-full text-left">批量导入钱包</button>
-              <button onClick={() => { setShowAddType(true); setShowDropdown(false); }} className="block px-4 py-2 text-sm text-yellow-800 hover:bg-yellow-200 w-full text-left">新增钱包类型</button>
-            </div>
-          )}
         </div>
       </div>
 
       {/* 钱包列表 */}
-      <div className="bg-yellow-50 rounded-md p-4">
-        {currentWallets.length > 0 ? (
-          currentWallets.map((wallet, index) => (
-            <div key={index} className="mb-4 p-4 bg-yellow-200 rounded-md relative">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-lg font-semibold text-yellow-800">{getWalletDisplayName(wallet)}</h3>
-                  <p className="text-yellow-700">{wallet.address}</p>
-                  {wallet.twitter && <p className="text-yellow-700">Twitter: {wallet.twitter}</p>}
-                  {wallet.email && <p className="text-yellow-700">Email: {wallet.email}</p>}
-                  <div className="mt-2">
-                    <span className="bg-yellow-300 px-2 py-1 rounded text-yellow-800 text-sm">
-                      {wallet.type}
-                    </span>
-                  </div>
-                  <div className="mt-2">
-                    <Link href={`/wallets/${wallet.address}`}>
-                      <span className="text-xl font-bold text-blue-500 hover:text-blue-700 cursor-pointer">
-                        ${Number(walletBalances[wallet.address]?.value || '0').toFixed(2)} →
-                      </span>
-                    </Link>
-                  </div>
-                  <div className="mt-2">
-                    {getRelatedProjects(wallet.address).map((project) => (
-                      <button
-                        key={project.id}
-                        onClick={() => openProjectDetails(project)}
-                        className="mr-2 mb-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 text-sm px-2 py-1 rounded-full"
-                      >
-                        {project.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <Link href={`/wallets/${wallet.address}`}>
-                    <button className="text-yellow-600 hover:text-yellow-800 p-1">
-                      <Info size={24} />
-                    </button>
-                  </Link>
-                  <button onClick={() => editWallet(wallet)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                    <Edit2 size={24} />
-                  </button>
-                  <button onClick={() => deleteWallet(wallet.address)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                    <Trash2 size={24} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="text-yellow-700">没有找到匹配的钱包</div>
-        )}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {currentWallets.map((wallet) => (
+          <WalletCard
+            key={wallet.address}
+            wallet={wallet}
+            balance={walletBalances[wallet.address]?.value || '0'}
+            onEdit={editWallet}
+            onDelete={deleteWallet}
+            copyToClipboard={copyToClipboard}
+          />
+        ))}
       </div>
 
       {/* 分页控件 */}
       {filteredWallets.length > 0 && (
-        <div className="mt-4 flex justify-center">
+        <div className="flex justify-center items-center space-x-4">
           <button
             onClick={() => paginate(currentPage - 1)}
             disabled={currentPage === 1}
-            className="mr-2 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded disabled:opacity-50"
+            className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 disabled:opacity-50 disabled:hover:bg-primary-100 transition-colors"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={20} />
           </button>
-          <span className="mx-2 py-2">{currentPage} / {totalPages}</span>
+          <span className="text-gray-700 font-medium">
+            第 {currentPage} 页，共 {totalPages} 页
+          </span>
           <button
             onClick={() => paginate(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="ml-2 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded disabled:opacity-50"
+            className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 disabled:opacity-50 disabled:hover:bg-primary-100 transition-colors"
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={20} />
           </button>
         </div>
       )}
@@ -440,50 +389,105 @@ export default function WalletManager() {
       {/* Add Wallet Modal */}
       {showAddWallet && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-yellow-100 p-6 rounded-lg w-96">
-            <h3 className="text-xl font-bold mb-4 text-yellow-800">新增钱包</h3>
-            <input
-              type="text"
-              placeholder="钱包地址"
-              value={newWalletAddress}
-              onChange={(e) => setNewWalletAddress(e.target.value)}
-              className="w-full p-2 mb-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-            />
-            <input
-              type="text"
-              placeholder="Twitter (可选)"
-              value={newWalletTwitter}
-              onChange={(e) => setNewWalletTwitter(e.target.value)}
-              className="w-full p-2 mb-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-            />
-            <input
-              type="email"
-              placeholder="邮箱 (可选)"
-              value={newWalletEmail}
-              onChange={(e) => setNewWalletEmail(e.target.value)}
-              className="w-full p-2 mb-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-            />
-            <select
-              value={newWalletType}
-              onChange={(e) => setNewWalletType(e.target.value)}
-              className="w-full p-2 mb-4 bg-yellow-50 rounded-md appearance-none text-yellow-800 border border-yellow-300"
-            >
-              {walletTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="钱包别名 (可选)"
-              value={newWalletAlias}
-              onChange={(e) => setNewWalletAlias(e.target.value)}
-              className="w-full p-2 mb-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-            />
-            <div className="flex justify-end">
-              <button onClick={() => setShowAddWallet(false)} className="mr-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded">
+          <div className="bg-white p-6 rounded-lg w-96 shadow-xl">
+            <h3 className="text-lg font-medium text-gray-900 mb-6">新增钱包</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  钱包地址
+                </label>
+                <input
+                  type="text"
+                  placeholder="输入钱包地址"
+                  value={newWalletAddress}
+                  onChange={(e) => setNewWalletAddress(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  钱包类型
+                </label>
+                <select
+                  value={newWalletType}
+                  onChange={(e) => setNewWalletType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white"
+                >
+                  <option value="">选择类型</option>
+                  {walletTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <div className="flex items-center">
+                    <Twitter size={16} className="mr-2 text-primary-500" />
+                    <span>Twitter (可选)</span>
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Twitter 账号"
+                  value={newWalletTwitter}
+                  onChange={(e) => setNewWalletTwitter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <div className="flex items-center">
+                    <Mail size={16} className="mr-2 text-primary-500" />
+                    <span>邮箱 (可选)</span>
+                  </div>
+                </label>
+                <input
+                  type="email"
+                  placeholder="邮箱地址"
+                  value={newWalletEmail}
+                  onChange={(e) => setNewWalletEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  别名 (可选)
+                </label>
+                <input
+                  type="text"
+                  placeholder="钱包别名"
+                  value={newWalletAlias}
+                  onChange={(e) => setNewWalletAlias(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button 
+                onClick={() => setShowAddWallet(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              >
                 取消
               </button>
-              <button onClick={addWallet} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded">
+              <button 
+                onClick={addWallet}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+              >
                 添加
               </button>
             </div>
@@ -494,28 +498,53 @@ export default function WalletManager() {
       {/* Bulk Add Modal */}
       {showBulkAdd && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-yellow-100 p-6 rounded-lg w-96">
-            <h3 className="text-xl font-bold mb-4 text-yellow-800">批量导入钱包</h3>
-            <textarea
-              placeholder="批量添加钱包地址（每行一个）"
-              value={bulkWallets}
-              onChange={(e) => setBulkWallets(e.target.value)}
-              className="w-full p-2 mb-2 bg-yellow-50 rounded-md h-40 text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-            />
-            <select
-              value={bulkWalletType}
-              onChange={(e) => setBulkWalletType(e.target.value)}
-              className="w-full p-2 mb-4 bg-yellow-50 rounded-md appearance-none text-yellow-800 border border-yellow-300"
-            >
-              {walletTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-            <div className="flex justify-end">
-              <button onClick={() => setShowBulkAdd(false)} className="mr-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded">
+          <div className="bg-white p-6 rounded-lg w-96 shadow-xl">
+            <h3 className="text-lg font-medium text-gray-900 mb-6">批量导入钱包</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  钱包类型
+                </label>
+                <select
+                  value={bulkWalletType}
+                  onChange={(e) => setBulkWalletType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white"
+                >
+                  <option value="">选择类型</option>
+                  {walletTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  钱包地址列表（每行一个地址）
+                </label>
+                <textarea
+                  value={bulkWallets}
+                  onChange={(e) => setBulkWallets(e.target.value)}
+                  placeholder="每行输入一个钱包地址..."
+                  className="w-full h-40 px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button 
+                onClick={() => setShowBulkAdd(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              >
                 取消
               </button>
-              <button onClick={addBulkWallets} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded">
+              <button 
+                onClick={addBulkWallets}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+              >
                 导入
               </button>
             </div>
@@ -550,50 +579,106 @@ export default function WalletManager() {
       {/* Edit Wallet Modal */}
       {showEditWallet && editingWallet && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-yellow-100 p-6 rounded-lg w-96">
-            <h3 className="text-xl font-bold mb-4 text-yellow-800">编辑钱包</h3>
-            <input
-              type="text"
-              placeholder="钱包地址"
-              value={editingWallet.address}
-              onChange={(e) => setEditingWallet({...editingWallet, address: e.target.value})}
-              className="w-full p-2 mb-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-            />
-            <input
-              type="text"
-              placeholder="Twitter (可选)"
-              value={editingWallet.twitter}
-              onChange={(e) => setEditingWallet({...editingWallet, twitter: e.target.value})}
-              className="w-full p-2 mb-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-            />
-            <input
-              type="email"
-              placeholder="邮箱 (可选)"
-              value={editingWallet.email}
-              onChange={(e) => setEditingWallet({...editingWallet, email: e.target.value})}
-              className="w-full p-2 mb-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-            />
-            <select
-              value={editingWallet.type}
-              onChange={(e) => setEditingWallet({...editingWallet, type: e.target.value})}
-              className="w-full p-2 mb-4 bg-yellow-50 rounded-md appearance-none text-yellow-800 border border-yellow-300"
-            >
-              {walletTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="钱包别名 (可选)"
-              value={editingWallet.alias || ''}
-              onChange={(e) => setEditingWallet({...editingWallet, alias: e.target.value})}
-              className="w-full p-2 mb-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-            />
-            <div className="flex justify-end">
-              <button onClick={() => setShowEditWallet(false)} className="mr-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded">
+          <div className="bg-white p-6 rounded-lg w-96 shadow-xl">
+            <h3 className="text-lg font-medium text-gray-900 mb-6">编辑钱包</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  钱包地址
+                </label>
+                <input
+                  type="text"
+                  value={editingWallet.address}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    bg-gray-50 text-gray-500
+                    focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  钱包类型
+                </label>
+                <select
+                  value={editingWallet.type}
+                  onChange={(e) => setEditingWallet({...editingWallet, type: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white"
+                >
+                  {walletTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <div className="flex items-center">
+                    <Twitter size={16} className="mr-2 text-primary-500" />
+                    <span>Twitter (可选)</span>
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Twitter 账号"
+                  value={editingWallet.twitter || ''}
+                  onChange={(e) => setEditingWallet({...editingWallet, twitter: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <div className="flex items-center">
+                    <Mail size={16} className="mr-2 text-primary-500" />
+                    <span>邮箱 (可选)</span>
+                  </div>
+                </label>
+                <input
+                  type="email"
+                  placeholder="邮箱地址"
+                  value={editingWallet.email || ''}
+                  onChange={(e) => setEditingWallet({...editingWallet, email: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  别名 (可选)
+                </label>
+                <input
+                  type="text"
+                  placeholder="钱包别名"
+                  value={editingWallet.alias || ''}
+                  onChange={(e) => setEditingWallet({...editingWallet, alias: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button 
+                onClick={() => {
+                  setShowEditWallet(false);
+                  setEditingWallet(null);
+                }}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              >
                 取消
               </button>
-              <button onClick={updateWallet} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded">
+              <button 
+                onClick={updateWallet}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+              >
                 更新
               </button>
             </div>
@@ -656,7 +741,7 @@ export default function WalletManager() {
                 </div>
               </div>
               <div>
-                <label className="block text-yellow-700 text-sm font-bold mb-2">标签</label>
+                <label className="block text-yellow-700 text-sm font-bold mb-2">签</label>
                 <div className="flex flex-wrap gap-2">
                   {selectedProject.tags.map((tag, index) => (
                     <span key={index} className="px-2 py-1 rounded-full text-sm bg-yellow-300 text-yellow-800">

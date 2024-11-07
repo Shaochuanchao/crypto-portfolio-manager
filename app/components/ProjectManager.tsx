@@ -1,15 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusCircle, X, Edit, Copy, Trash2, RefreshCw, ChevronLeft, ChevronRight, CheckCircle, XCircle, Search } from 'lucide-react'
+import { PlusCircle, X, Edit2, Copy, Trash2, RefreshCw, ChevronLeft, ChevronRight, Search, Globe, MessageCircle, Send, Twitter, DollarSign, Calendar, Tag, CheckCircle, XCircle } from 'lucide-react'
+import Link from 'next/link'
 import { Project, Wallet } from '../data/model'
 import { projectStorageIndexedDB, walletStorageIndexedDB } from '../utils/storage-db'
-import { truncateString } from '../utils/helpers'
+import ProjectCard from './ProjectCard'
 
 const PREDEFINED_TAGS = ['空投', 'DeFi']
 const PROJECT_STAGES = ['测试', '主网上线']
 const AIRDROP_STAGES = ['未开始', '已明确', '已发']
-
 
 export default function ProjectManager() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -227,176 +227,98 @@ export default function ProjectManager() {
   )
 
   return (
-    <div className="bg-yellow-100 rounded-lg p-6 shadow-lg relative">
-      <h2 className="text-2xl font-bold mb-4 text-yellow-800">项目管理</h2>
-      
-      {/* 搜索框 */}
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="搜索项目..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
-        />
-      </div>
+    <div className="space-y-6">
+      {/* 顶部操作栏 */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center space-x-4">
+          {/* 搜索框 */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="搜索项目..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+          </div>
 
-      {/* 标签筛选 */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        {PREDEFINED_TAGS.map(tag => (
+          {/* 标签筛选 */}
+          <div className="flex space-x-2">
+            {PREDEFINED_TAGS.map(tag => (
+              <button
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  selectedTags.includes(tag)
+                    ? 'bg-primary-100 text-primary-700 border border-primary-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 添加按钮 */}
+        <div className="flex space-x-2">
           <button
-            key={tag}
-            onClick={() => toggleTag(tag)}
-            className={`px-3 py-1 rounded-full text-sm ${
-              selectedTags.includes(tag) ? getTagColor(tag) : 'bg-yellow-200 text-yellow-700'
-            }`}
+            onClick={() => setShowAddTag(true)}
+            className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors"
           >
-            {tag}
+            新增标签
           </button>
-        ))}
-      </div>
-
-      {/* 添加项目标签按钮 */}
-      <div className="absolute top-6 right-6 flex space-x-2">
-        <button onClick={() => setShowAddProject(true)} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded inline-flex items-center">
-          <PlusCircle className="mr-2" size={18} />
-          <span>新增项目</span>
-        </button>
-        <button onClick={() => setShowAddTag(true)} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded inline-flex items-center">
-          <PlusCircle className="mr-2" size={18} />
-          <span>新增标签</span>
-        </button>
+          <button
+            onClick={() => setShowAddProject(true)}
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            添加项目
+          </button>
+        </div>
       </div>
 
       {/* 项目列表 */}
-      <div className="space-y-4">
-        {filteredProjects.length > 0 ? (
-          currentProjects.map((project, index) => (
-            <div 
-              key={index} 
-              className={`rounded-md p-4 shadow ${
-                project.isDeleted 
-                  ? 'bg-gray-200' 
-                  : isProjectExpired(project) 
-                    ? 'bg-red-100' 
-                    : 'bg-yellow-50'
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className={`text-lg font-semibold ${project.isDeleted ? 'text-gray-600' : 'text-yellow-800'}`}>
-                    {project.name}
-                  </h3>
-                  <p className="text-yellow-700 mt-2">{project.description}</p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {!project.isDeleted && (
-                    <button onClick={() => editProject(project)} className="text-yellow-600 hover:text-yellow-800 p-1">
-                      <Edit size={24} />
-                    </button>
-                  )}
-                  <button 
-                    onClick={() => project.isDeleted ? restoreProject(project.id) : deleteProject(project.id)} 
-                    className="text-yellow-600 hover:text-yellow-800 p-1"
-                  >
-                    {project.isDeleted ? <RefreshCw size={24} /> : <Trash2 size={24} />}
-                  </button>
-                </div>
-              </div>
-              <div className="mt-2 space-y-1">
-                <p className="text-yellow-600">
-                  网站: <a href={project.website} className="text-blue-500 hover:underline" title={project.website}>
-                    {truncateString(project.website, 30)}
-                  </a>
-                </p>
-                <p className="text-yellow-600">
-                  Discord: <a href={project.discord} className="text-blue-500 hover:underline" title={project.discord}>
-                    {truncateString(project.discord, 30)}
-                  </a>
-                </p>
-                <p className="text-yellow-600">
-                  Telegram: <a href={project.telegram} className="text-blue-500 hover:underline" title={project.telegram}>
-                    {truncateString(project.telegram, 30)}
-                  </a>
-                </p>
-                <p className="text-yellow-600">
-                  Twitter: <a href={project.twitter} className="text-blue-500 hover:underline" title={project.twitter}>
-                    {truncateString(project.twitter, 30)}
-                  </a>
-                </p>
-              </div>
-              <p className="text-yellow-700">所处阶段: {project.stage}</p>
-              <p className="text-yellow-700">空投阶段: {project.airdropStage}</p>
-              <p className="text-yellow-700">预计币价: ${project.estimatedPrice}</p>
-              <p className="text-yellow-700">结束时间: {project.endDate}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {project.tags && project.tags.length > 0 ? (
-                  project.tags.map((tag, tagIndex) => (
-                    <span key={tagIndex} className={`px-2 py-1 rounded-full text-sm ${getTagColor(tag)}`}>
-                      {tag}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-yellow-600">无标签</span>
-                )}
-              </div>
-              <div className="mt-2 flex items-center">
-                <span className="mr-2">是否必做:</span>
-                {project.isMandatory ? (
-                  <CheckCircle className="text-yellow-500" size={24} />
-                ) : (
-                  <XCircle className="text-gray-500" size={24} />
-                )}
-              </div>
-              <div className="mt-2">
-                <p className="text-yellow-700">关联钱包:</p>
-                <div className="flex flex-wrap gap-2">
-                  {project.relatedWallets && project.relatedWallets.length > 0 ? (
-                    project.relatedWallets.map((address, index) => (
-                      <span key={index} className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full text-sm flex items-center">
-                        {getWalletDisplayName(address)}
-                        <button onClick={() => copyToClipboard(address)} className="ml-1 text-yellow-600 hover:text-yellow-800">
-                          <Copy size={14} />
-                        </button>
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-yellow-600">无关联钱包</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-yellow-800 mb-4">暂无项目，请新增</p>
-            <button 
-              onClick={() => setShowAddProject(true)} 
-              className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded"
-            >
-              新增项目
-            </button>
-          </div>
-        )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {currentProjects.map((project) => (
+          <ProjectCard
+            key={project.id}
+            project={project}
+            onEdit={editProject}
+            onDelete={deleteProject}
+            onRestore={restoreProject}
+            getTagColor={getTagColor}
+            copyToClipboard={copyToClipboard}
+            getWalletDisplayName={getWalletDisplayName}
+            isProjectExpired={(project) => {
+              if (!project.endDate) return false;
+              const endDate = new Date(project.endDate);
+              const today = new Date();
+              return endDate < today;
+            }}
+          />
+        ))}
       </div>
 
       {/* 分页控件 */}
       {filteredProjects.length > 0 && (
-        <div className="mt-4 flex justify-center">
+        <div className="flex justify-center items-center space-x-4">
           <button
             onClick={() => paginate(currentPage - 1)}
             disabled={currentPage === 1}
-            className="mr-2 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded disabled:opacity-50"
+            className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 disabled:opacity-50 disabled:hover:bg-primary-100 transition-colors"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={20} />
           </button>
-          <span className="mx-2 py-2">{currentPage} / {totalPages}</span>
+          <span className="text-gray-700 font-medium">
+            第 {currentPage} 页，共 {totalPages} 页
+          </span>
           <button
             onClick={() => paginate(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="ml-2 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded disabled:opacity-50"
+            className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 disabled:opacity-50 disabled:hover:bg-primary-100 transition-colors"
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={20} />
           </button>
         </div>
       )}
@@ -404,100 +326,116 @@ export default function ProjectManager() {
       {/* 添加/编辑项目模态框 */}
       {showAddProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-          <div className="bg-yellow-100 p-6 rounded-lg w-3/4 max-w-4xl my-8">
-            <h3 className="text-xl font-bold mb-4 text-yellow-800">{editingProject ? '编辑项目' : '新增项目'}</h3>
-            <div className="grid grid-cols-1 gap-4">
+          <div className="bg-white p-6 rounded-lg w-3/4 max-w-4xl my-8 shadow-xl">
+            <h3 className="text-lg font-medium text-gray-900 mb-6">
+              {editingProject ? '编辑项目' : '新增项目'}
+            </h3>
+            <div className="grid grid-cols-1 gap-6">
+              {/* 基本信息 */}
               <div>
-                <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-name">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   项目名称
                 </label>
                 <input
-                  id="project-name"
                   type="text"
-                  placeholder="项名称"
+                  placeholder="项目名称"
                   value={newProject.name}
                   onChange={(e) => setNewProject({...newProject, name: e.target.value})}
-                  className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
                 />
               </div>
+
+              {/* 项目简介 */}
               <div>
-                <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-description">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   项目简介
                 </label>
                 <textarea
-                  id="project-description"
                   placeholder="项目简介"
                   value={newProject.description}
                   onChange={(e) => setNewProject({...newProject, description: e.target.value})}
-                  className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300 h-20"
+                  className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-primary-500
+                    text-gray-900 bg-white placeholder-gray-400"
                 />
               </div>
+
+              {/* 社交链接 */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-discord">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Discord链接
                   </label>
                   <input
-                    id="project-discord"
                     type="text"
                     placeholder="Discord链接"
                     value={newProject.discord}
                     onChange={(e) => setNewProject({...newProject, discord: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white placeholder-gray-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-website">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     官网地址
                   </label>
                   <input
-                    id="project-website"
                     type="text"
                     placeholder="官网地址"
                     value={newProject.website}
                     onChange={(e) => setNewProject({...newProject, website: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white placeholder-gray-400"
                   />
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-telegram">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Telegram链接
                   </label>
                   <input
-                    id="project-telegram"
                     type="text"
                     placeholder="Telegram链接"
                     value={newProject.telegram}
                     onChange={(e) => setNewProject({...newProject, telegram: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white placeholder-gray-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-twitter">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Twitter链接
                   </label>
                   <input
-                    id="project-twitter"
                     type="text"
                     placeholder="Twitter链接"
                     value={newProject.twitter}
                     onChange={(e) => setNewProject({...newProject, twitter: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white placeholder-gray-400"
                   />
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-stage">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     所处阶段
                   </label>
                   <select
-                    id="project-stage"
                     value={newProject.stage}
                     onChange={(e) => setNewProject({...newProject, stage: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white placeholder-gray-400"
                   >
                     {PROJECT_STAGES.map(stage => (
                       <option key={stage} value={stage}>{stage}</option>
@@ -505,14 +443,15 @@ export default function ProjectManager() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-airdrop-stage">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     空投阶段
                   </label>
                   <select
-                    id="project-airdrop-stage"
                     value={newProject.airdropStage}
                     onChange={(e) => setNewProject({...newProject, airdropStage: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white placeholder-gray-400"
                   >
                     {AIRDROP_STAGES.map(stage => (
                       <option key={stage} value={stage}>{stage}</option>
@@ -520,107 +459,96 @@ export default function ProjectManager() {
                   </select>
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-estimated-price">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     预计币价格
                   </label>
                   <input
-                    id="project-estimated-price"
                     type="text"
                     placeholder="预计币价格"
                     value={newProject.estimatedPrice}
                     onChange={(e) => setNewProject({...newProject, estimatedPrice: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white placeholder-gray-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-yellow-700 text-sm font-bold mb-2" htmlFor="project-end-date">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     结束时间节点
                   </label>
                   <input
-                    id="project-end-date"
                     type="date"
                     placeholder="结束时间节点"
                     value={newProject.endDate}
                     onChange={(e) => setNewProject({...newProject, endDate: e.target.value})}
-                    className="w-full p-2 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-primary-500
+                      text-gray-900 bg-white placeholder-gray-400"
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-yellow-800 mb-2">选择标签：</p>
-                  <div className="flex flex-wrap gap-2">
-                    {PREDEFINED_TAGS.map((tag) => (
-                      <button
-                        key={tag}
-                        onClick={() => setNewProject(prev => ({
-                          ...prev,
-                          tags: prev.tags.includes(tag) 
-                            ? prev.tags.filter(t => t !== tag)
-                            : [...prev.tags, tag]
-                        }))}
-                        className={`px-2 py-1 rounded-full text-sm ${
-                          newProject.tags.includes(tag)
-                            ? getTagColor(tag)
-                            : 'bg-yellow-200 text-yellow-700'
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    id="project-mandatory"
-                    type="checkbox"
-                    checked={newProject.isMandatory}
-                    onChange={(e) => setNewProject({...newProject, isMandatory: e.target.checked})}
-                    className="mr-2"
-                  />
-                  <label htmlFor="project-mandatory" className="text-yellow-800">是否为必做项目</label>
-                </div>
-              </div>
+
+              {/* 标签选择 */}
               <div>
-                <p className="text-yellow-800 mb-2">关联钱包：</p>
-                <div className="flex flex-wrap gap-2 items-center">
-                  {newProject.relatedWallets.map((address, index) => (
-                    <span key={index} className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full text-sm flex items-center">
-                      {shortenAddress(address)}
-                      <button 
-                        onClick={() => setNewProject(prev => ({
-                          ...prev, 
-                          relatedWallets: prev.relatedWallets.filter(a => a !== address)
-                        }))} 
-                        className="ml-1 text-yellow-600 hover:text-yellow-800"
-                      >
-                        <X size={14} />
-                      </button>
-                    </span>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  选择标签
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {PREDEFINED_TAGS.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => setNewProject(prev => ({
+                        ...prev,
+                        tags: prev.tags.includes(tag) 
+                          ? prev.tags.filter(t => t !== tag)
+                          : [...prev.tags, tag]
+                      }))}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                        newProject.tags.includes(tag)
+                          ? 'bg-primary-100 text-primary-700 border border-primary-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {tag}
+                    </button>
                   ))}
-                  <button
-                    onClick={() => setShowWalletSelector(true)}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold p-2 rounded-full"
-                  >
-                    <PlusCircle size={18} />
-                  </button>
                 </div>
+              </div>
+
+              {/* 必做项目复选框 */}
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="project-mandatory"
+                  checked={newProject.isMandatory}
+                  onChange={(e) => setNewProject({...newProject, isMandatory: e.target.checked})}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label htmlFor="project-mandatory" className="ml-2 text-sm text-gray-700">
+                  是否为必做项目
+                </label>
               </div>
             </div>
-            <div className="flex justify-end mt-4">
+
+            {/* 底部按钮 */}
+            <div className="mt-6 flex justify-end space-x-3">
               <button 
                 onClick={() => {
                   setShowAddProject(false);
                   setEditingProject(null);
                   resetNewProject();
                 }} 
-                className="mr-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded"
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
               >
                 取消
               </button>
-              <button onClick={updateProject} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded">
+              <button 
+                onClick={updateProject} 
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+              >
                 {editingProject ? '更新' : '添加'}
               </button>
             </div>
@@ -688,20 +616,28 @@ export default function ProjectManager() {
       {/* 添加标签模态框 */}
       {showAddTag && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-yellow-100 p-6 rounded-lg w-96">
-            <h3 className="text-xl font-bold mb-4 text-yellow-800">新增标签</h3>
+          <div className="bg-white p-6 rounded-lg w-96 shadow-xl">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">新增标签</h3>
             <input
               type="text"
               placeholder="新标签名称"
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
-              className="w-full p-2 mb-4 bg-yellow-50 rounded-md text-yellow-800 placeholder-yellow-500 border border-yellow-300"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md 
+                focus:outline-none focus:ring-2 focus:ring-primary-500
+                text-gray-900 bg-white placeholder-gray-400 mb-4"
             />
-            <div className="flex justify-end">
-              <button onClick={() => setShowAddTag(false)} className="mr-2 bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded">
+            <div className="flex justify-end space-x-3">
+              <button 
+                onClick={() => setShowAddTag(false)} 
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              >
                 取消
               </button>
-              <button onClick={addTag} className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-bold py-2 px-4 rounded">
+              <button 
+                onClick={addTag} 
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+              >
                 添加
               </button>
             </div>

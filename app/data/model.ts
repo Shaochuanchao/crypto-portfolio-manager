@@ -35,12 +35,11 @@ export interface Task {
     guideLink: string;
     description: string;
     isDaily: boolean;
-    subTaskCount: number;
     isDeleted: boolean;
     createdAt: string;
     updatedAt?: string;
-    priority: number; // 1-5，5 表示最高优先级
-    priorityNote: string; // 优先级备注
+    priority: number;
+    priorityNote: string;
 }
 
 export interface SubTask {
