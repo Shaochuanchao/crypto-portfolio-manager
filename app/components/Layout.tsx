@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Wallet, Coins, CheckSquare, Github, X, BookOpen } from 'lucide-react'
+import { Wallet, Coins, CheckSquare, Github, X, BookOpen, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getGasPrice, GasPrice } from '../utils/api_etherscan'
 import { getCachedTokenPrice } from '../utils/api_okx'
+import { exportData, importData } from '../utils/data-transfer'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -13,6 +14,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [gasPrice, setGasPrice] = useState<GasPrice | null>(null)
   const [btcPrice, setBtcPrice] = useState<string>('')
   const [ethPrice, setEthPrice] = useState<string>('')
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     if (pathname.includes('/wallets')) setActiveTab('wallets')
@@ -59,6 +61,39 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [])
 
   const formatGasPrice = (price: string) => Number(price).toFixed(2)
+
+  // 处理导出数据
+  const handleExport = async () => {
+    try {
+      await exportData()
+      setShowSettings(false)
+    } catch (error) {
+      console.error('导出数据失败:', error)
+      alert('导出数据失败')
+    }
+  }
+
+  // 处理导入数据
+  const handleImport = async () => {
+    try {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.json'
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0]
+        if (file) {
+          await importData(file)
+          setShowSettings(false)
+          // 刷新页面以显示新数据
+          window.location.reload()
+        }
+      }
+      input.click()
+    } catch (error) {
+      console.error('导入数据失败:', error)
+      alert('导入数据失败')
+    }
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -124,6 +159,34 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     <span className="text-red-700">{formatGasPrice(gasPrice.FastGasPrice)}</span>
                   </Link>
                 )}
+
+                {/* 设置按钮和下拉菜单 */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowSettings(!showSettings)}
+                    className="flex items-center px-3 py-2 bg-gray-50 border border-gray-200 rounded-full text-sm font-bold hover:bg-gray-100 transition-colors"
+                  >
+                    <Settings size={20} className="text-gray-600" />
+                  </button>
+
+                  {/* 设置下拉菜单 */}
+                  {showSettings && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
+                      <button
+                        onClick={handleExport}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        导出数据
+                      </button>
+                      <button
+                        onClick={handleImport}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        导入数据
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
