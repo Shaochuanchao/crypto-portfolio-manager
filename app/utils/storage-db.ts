@@ -1,5 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { Wallet, Project, Task, SubTask, Chain } from '../data/model';
+import { Wallet, Project, Task, SubTask, Chain, Note } from '../data/model';
 
 interface MyDB extends DBSchema {
   wallets: {
@@ -20,17 +20,21 @@ interface MyDB extends DBSchema {
   };
   subTasks: {
     key: string;
-    value: SubTask[];
+    value: SubTask;
     indexes: { 'by-taskId': string };
   };
   chains: {
     key: string;
-    value: Chain[];
+    value: Chain;
+  };
+  notes: {
+    key: string;
+    value: Note;
   };
 }
 
 const DB_NAME = 'MyAppDatabase';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 async function getDB(): Promise<IDBPDatabase<MyDB>> {
   return openDB<MyDB>(DB_NAME, DB_VERSION, {
@@ -42,6 +46,12 @@ async function getDB(): Promise<IDBPDatabase<MyDB>> {
         db.createObjectStore('tasks',{keyPath:'id'});
         const subTaskStore = db.createObjectStore('subTasks', { keyPath: 'id' });
         subTaskStore.createIndex('by-taskId', 'taskId');
+        db.createObjectStore('chains', { keyPath: 'chainIndex' });
+      }
+      if (oldVersion < 2) {
+        if (!db.objectStoreNames.contains('notes')) {
+          db.createObjectStore('notes', { keyPath: 'id' });
+        }
       }
     },
   });
@@ -255,25 +265,49 @@ export const subTaskStorageIndexedDB = {
 };
 
 export const chainStorageIndexedDB = {
-  getChains: async (): Promise<Chain[]> => {
+  async getChains(): Promise<Chain[]> {
     const db = await getDB();
     return db.getAll('chains');
   },
 
-  saveChains: async (chains: Chain[]): Promise<void> => {
+  async saveChains(chains: Chain[]): Promise<void> {
     const db = await getDB();
     const tx = db.transaction('chains', 'readwrite');
     await Promise.all([
       ...chains.map(chain => tx.store.put(chain)),
       tx.done
     ]);
+  }
+};
+
+// 笔记相关操作
+export const noteStorageIndexedDB = {
+  async getNotes(): Promise<Note[]> {
+    const db = await getDB();
+    const notes = await db.getAll('notes');
+    console.log('Retrieved notes:', notes);
+    return notes.filter(note => !note.isDeleted);
   },
 
-  getLastUpdated: async (): Promise<string | null> => {
-    const chains = await chainStorageIndexedDB.getChains();
-    if (chains.length > 0) {
-      return chains[0].lastUpdated || null;
+  async saveNote(note: Note): Promise<void> {
+    console.log('Saving note:', note);
+    if (!note.id) {
+      note.id = generateUniqueId();
+      note.createdAt = new Date().toISOString();
     }
-    return null;
+    note.updatedAt = new Date().toISOString();
+    const db = await getDB();
+    await db.put('notes', note);
+  },
+
+  async deleteNote(id: string): Promise<void> {
+    console.log(`Deleting note with ID: ${id}`);
+    const db = await getDB();
+    const note = await db.get('notes', id);
+    if (note) {
+      note.isDeleted = true;
+      note.updatedAt = new Date().toISOString();
+      await db.put('notes', note);
+    }
   }
 };

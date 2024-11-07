@@ -38,6 +38,7 @@ export interface Task {
     subTaskCount: number;
     isDeleted: boolean;
     createdAt: string;
+    updatedAt?: string;
     priority: number; // 1-5，5 表示最高优先级
     priorityNote: string; // 优先级备注
 }
@@ -56,4 +57,15 @@ export interface Chain {
   shortName: string;
   chainIndex: string;
   lastUpdated?: string;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  priority: number; // 1-5 表示优先级
+  tags: string[];
+  createdAt: string;
+  updatedAt?: string;
+  isDeleted?: boolean;
 }

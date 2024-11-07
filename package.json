@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tailwindcss/forms": "^0.5.9",
     "axios": "^1.7.7",
     "idb": "^8.0.0",
     "lucide-react": "^0.453.0",

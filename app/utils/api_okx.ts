@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { chainStorageIndexedDB } from './storage-db';
 
 const API_KEY = process.env.NEXT_PUBLIC_OKX_API_KEY;
 const SECRET_KEY = process.env.NEXT_PUBLIC_OKX_SECRET_KEY;
@@ -28,6 +29,13 @@ interface TokenBalance {
 
 interface TotalValue {
   totalValue: string;
+}
+
+interface TokenPrice {
+  chainIndex: string;
+  tokenAddress: string;
+  price: string;
+  time: string;
 }
 
 // 更新 EVM 链的索引列表
@@ -295,4 +303,44 @@ export async function getSupportedChains(): Promise<Chain[]> {
 // 导出链名称映射，供其他组件使用
 export function getChainName(chainIndex: string): string {
   return CHAIN_NAMES[chainIndex] || chainIndex;
+}
+
+// 获取实时币价
+export async function getCurrentPrice(tokens: { chainIndex: string; tokenAddress: string }[]): Promise<TokenPrice[]> {
+  const path = '/api/v5/wallet/token/current-price';
+  const body = JSON.stringify(tokens);
+  const headers = await getHeaders('POST', path, body);
+
+  try {
+    const response = await axios.post(`${BASE_URL}${path}`, tokens, { headers });
+    console.log('Current price response:', response.data);
+    if (response.data.code === '0') {
+      return response.data.data;
+    }
+    throw new Error(response.data.msg || 'Failed to fetch current price');
+  } catch (error) {
+    console.error('Error fetching current price:', error);
+    throw error;
+  }
+}
+
+// 缓存管理
+const priceCache: { [key: string]: { data: TokenPrice; timestamp: number } } = {};
+const PRICE_CACHE_DURATION = 30000; // 30秒缓存
+
+export async function getCachedTokenPrice(chainIndex: string, tokenAddress: string = ''): Promise<TokenPrice> {
+  const cacheKey = `${chainIndex}-${tokenAddress}`;
+  const now = Date.now();
+
+  if (priceCache[cacheKey] && now - priceCache[cacheKey].timestamp < PRICE_CACHE_DURATION) {
+    return priceCache[cacheKey].data;
+  }
+
+  const tokens = [{ chainIndex, tokenAddress }];
+  const prices = await getCurrentPrice(tokens);
+  if (prices && prices.length > 0) {
+    priceCache[cacheKey] = { data: prices[0], timestamp: now };
+    return prices[0];
+  }
+  throw new Error('Failed to fetch token price');
 }

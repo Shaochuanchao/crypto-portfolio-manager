@@ -9,7 +9,7 @@ import { truncateString } from '../utils/helpers'; // 假设我们在 utils 文�
 export default function TaskManager() {
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
-  const [activeTab, setActiveTab] = useState<'daily' | 'oneTime'>('daily')
+  const [activeTab, setActiveTab] = useState<'all' | 'daily' | 'oneTime' | 'useless'>('all')
   const [showAddTask, setShowAddTask] = useState(false)
   const [showSubTasks, setShowSubTasks] = useState(false)
   const [showAddSubTask, setShowAddSubTask] = useState(false)
@@ -206,7 +206,10 @@ export default function TaskManager() {
 
   const filteredTasks = tasks.filter(task => 
     !task.isDeleted && 
-    task.isDaily === (activeTab === 'daily') &&
+    (activeTab === 'all' ||
+     (activeTab === 'daily' && task.isDaily) ||
+     (activeTab === 'oneTime' && !task.isDaily && !task.isUseless) ||
+     (activeTab === 'useless' && task.isUseless)) &&
     task.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -327,6 +330,12 @@ export default function TaskManager() {
 
       <div className="mb-4">
         <button
+          onClick={() => setActiveTab('all')}
+          className={`mr-2 px-4 py-2 rounded ${activeTab === 'all' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'}`}
+        >
+          所有任务
+        </button>
+        <button
           onClick={() => setActiveTab('daily')}
           className={`mr-2 px-4 py-2 rounded ${activeTab === 'daily' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'}`}
         >
@@ -334,9 +343,15 @@ export default function TaskManager() {
         </button>
         <button
           onClick={() => setActiveTab('oneTime')}
-          className={`px-4 py-2 rounded ${activeTab === 'oneTime' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'}`}
+          className={`mr-2 px-4 py-2 rounded ${activeTab === 'oneTime' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'}`}
         >
           一次性任务
+        </button>
+        <button
+          onClick={() => setActiveTab('useless')}
+          className={`px-4 py-2 rounded ${activeTab === 'useless' ? 'bg-yellow-500 text-yellow-900' : 'bg-yellow-200 text-yellow-700'}`}
+        >
+          鸡肋任务
         </button>
       </div>
 
