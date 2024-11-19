@@ -1,5 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { Wallet, Project, Task, SubTask, Chain, Note } from '../data/model';
+import { Wallet, Project, Task, SubTask, Chain, Note, Tag } from '../data/model';
 
 interface MyDB extends DBSchema {
   wallets: {
@@ -31,10 +31,14 @@ interface MyDB extends DBSchema {
     key: string;
     value: Note;
   };
+  tags: {
+    key: string;
+    value: Tag;
+  };
 }
 
 const DB_NAME = 'MyAppDatabase';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 async function getDB(): Promise<IDBPDatabase<MyDB>> {
   return openDB<MyDB>(DB_NAME, DB_VERSION, {
@@ -59,6 +63,10 @@ async function getDB(): Promise<IDBPDatabase<MyDB>> {
           db.createObjectStore('notes', { keyPath: 'id' });
         }
       }
+
+      if (!db.objectStoreNames.contains('tags')) {
+        db.createObjectStore('tags', { keyPath: 'id' });
+      }
     },
   });
 }
@@ -78,7 +86,8 @@ async function getData<T>(storeName: 'wallets' | 'walletTypes' | 'projects' | 't
   return (data as T) ?? defaultValue;
 }
 
-function generateUniqueId(): string {
+// 将 generateUniqueId 改为导出函数
+export function generateUniqueId(): string {
   return Math.random().toString(36).substr(2, 9);
 }
 
@@ -337,5 +346,27 @@ export const noteStorageIndexedDB = {
       note.updatedAt = new Date().toISOString();
       await db.put('notes', note);
     }
+  }
+};
+
+// 标签相关操作
+export const tagStorageIndexedDB = {
+  async getTags(): Promise<Tag[]> {
+    const db = await getDB();
+    const tags = await db.getAll('tags');
+    return tags;
+  },
+
+  async saveTag(tag: Tag): Promise<void> {
+    if (!tag.id) {
+      tag.id = generateUniqueId();
+    }
+    const db = await getDB();
+    await db.put('tags', tag);
+  },
+
+  async deleteTag(id: string): Promise<void> {
+    const db = await getDB();
+    await db.delete('tags', id);
   }
 };

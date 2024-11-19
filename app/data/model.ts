@@ -68,3 +68,10 @@ export interface Note {
   updatedAt?: string;
   isDeleted?: boolean;
 }
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;  // 添加颜色属性
+  createdAt: string;
+}

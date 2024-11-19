@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusCircle, X, Edit2, Copy, Trash2, RefreshCw, ChevronLeft, ChevronRight, Search, Globe, MessageCircle, Send, Twitter, DollarSign, Calendar, Tag, CheckCircle, XCircle } from 'lucide-react'
+import { PlusCircle, X, Edit2, Copy, Trash2, RefreshCw, ChevronLeft, ChevronRight, Search, Globe, MessageCircle, Send, Twitter, DollarSign, Calendar, Tag as TagIcon, CheckCircle, XCircle } from 'lucide-react'
 import Link from 'next/link'
-import { Project, Wallet } from '../data/model'
-import { projectStorageIndexedDB, walletStorageIndexedDB } from '../utils/storage-db'
+import { Project, Wallet, Tag } from '../data/model'
+import { projectStorageIndexedDB, walletStorageIndexedDB, tagStorageIndexedDB, generateUniqueId } from '../utils/storage-db'
 import ProjectCard from './ProjectCard'
+import { getColorForString, getRandomColor } from '../utils/color-utils'
 
-const PREDEFINED_TAGS = ['空投', 'DeFi']
 const PROJECT_STAGES = ['测试', '主网上线']
 const AIRDROP_STAGES = ['未开始', '已明确', '已发']
 
@@ -43,12 +43,15 @@ export default function ProjectManager() {
   const [walletSearchTerm, setWalletSearchTerm] = useState('')
   const [walletTypes, setWalletTypes] = useState<string[]>([])
   const [searchTerm, setSearchTerm] = useState('');
+  const [tags, setTags] = useState<Tag[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
       const savedProjects = await projectStorageIndexedDB.getProjects()
+      const savedTags = await tagStorageIndexedDB.getTags()
       console.log('Loaded projects:', savedProjects)
       setProjects(savedProjects)
+      setTags(savedTags)
       setWallets(await walletStorageIndexedDB.getWallets())
       
       // 加载钱包类型
@@ -100,19 +103,31 @@ export default function ProjectManager() {
     }
   }
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev => 
-      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
-    )
-  }
+  const toggleTag = (tagName: string) => {
+    setSelectedTags(prev => {
+      if (prev.includes(tagName)) {
+        return prev.filter(t => t !== tagName);
+      } else {
+        return [...prev, tagName];
+      }
+    });
+    setCurrentPage(1);
+  };
 
-  const addTag = () => {
-    if (newTag && !PREDEFINED_TAGS.includes(newTag)) {
-      PREDEFINED_TAGS.push(newTag)
-      setNewTag('')
-      setShowAddTag(false)
+  const addTag = async () => {
+    if (newTag && !tags.some(tag => tag.name === newTag)) {
+      const tag: Tag = {
+        id: generateUniqueId(),
+        name: newTag,
+        color: getRandomColor(),
+        createdAt: new Date().toISOString()
+      };
+      await tagStorageIndexedDB.saveTag(tag);
+      setTags(prev => [...prev, tag]);
+      setNewTag('');
+      setShowAddTag(false);
     }
-  }
+  };
 
   const getTagColor = (tag: string) => {
     return tag === '空投' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'
@@ -167,10 +182,12 @@ export default function ProjectManager() {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 
-  const filteredProjects = sortedProjects.filter(project => 
-    (selectedTags.length === 0 || selectedTags.some(tag => project.tags.includes(tag))) &&
-    project.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredProjects = sortedProjects.filter(project => {
+    const nameMatches = project.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const tagMatches = selectedTags.length === 0 || 
+      selectedTags.every(selectedTag => project.tags.includes(selectedTag));
+    return nameMatches && tagMatches;
+  });
 
   const indexOfLastProject = currentPage * projectsPerPage
   const indexOfFirstProject = indexOfLastProject - projectsPerPage
@@ -245,17 +262,17 @@ export default function ProjectManager() {
 
           {/* 标签筛选 */}
           <div className="flex space-x-2">
-            {PREDEFINED_TAGS.map(tag => (
+            {tags.map((tag) => (
               <button
-                key={tag}
-                onClick={() => toggleTag(tag)}
+                key={tag.id}
+                onClick={() => toggleTag(tag.name)}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  selectedTags.includes(tag)
-                    ? 'bg-primary-100 text-primary-700 border border-primary-200'
+                  selectedTags.includes(tag.name)
+                    ? tag.color
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {tag}
+                {tag.name}
               </button>
             ))}
           </div>
@@ -284,18 +301,14 @@ export default function ProjectManager() {
           <ProjectCard
             key={project.id}
             project={project}
+            tags={tags}
             onEdit={editProject}
             onDelete={deleteProject}
             onRestore={restoreProject}
             getTagColor={getTagColor}
             copyToClipboard={copyToClipboard}
             getWalletDisplayName={getWalletDisplayName}
-            isProjectExpired={(project) => {
-              if (!project.endDate) return false;
-              const endDate = new Date(project.endDate);
-              const today = new Date();
-              return endDate < today;
-            }}
+            isProjectExpired={isProjectExpired}
           />
         ))}
       </div>
@@ -497,22 +510,22 @@ export default function ProjectManager() {
                   选择标签
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {PREDEFINED_TAGS.map((tag) => (
+                  {tags.map((tag) => (
                     <button
-                      key={tag}
+                      key={tag.id}
                       onClick={() => setNewProject(prev => ({
                         ...prev,
-                        tags: prev.tags.includes(tag) 
-                          ? prev.tags.filter(t => t !== tag)
-                          : [...prev.tags, tag]
+                        tags: prev.tags.includes(tag.name) 
+                          ? prev.tags.filter(t => t !== tag.name)
+                          : [...prev.tags, tag.name]
                       }))}
                       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                        newProject.tags.includes(tag)
-                          ? 'bg-primary-100 text-primary-700 border border-primary-200'
+                        newProject.tags.includes(tag.name)
+                          ? tag.color
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
                     >
-                      {tag}
+                      {tag.name}
                     </button>
                   ))}
                 </div>
@@ -627,6 +640,19 @@ export default function ProjectManager() {
                 focus:outline-none focus:ring-2 focus:ring-primary-500
                 text-gray-900 bg-white placeholder-gray-400 mb-4"
             />
+            <div className="mb-4">
+              <p className="text-sm text-gray-500 mb-2">已有标签：</p>
+              <div className="flex flex-wrap gap-2">
+                {tags.map(tag => (
+                  <span 
+                    key={tag.id} 
+                    className={`px-2 py-1 rounded-full text-sm ${tag.color}`}
+                  >
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+            </div>
             <div className="flex justify-end space-x-3">
               <button 
                 onClick={() => setShowAddTag(false)} 

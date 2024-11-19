@@ -1,4 +1,4 @@
-import { Project } from '../data/model'
+import { Project, Tag } from '../data/model'
 import { Edit2, Trash2, RefreshCw, Copy, Globe, MessageCircle, Send, Twitter } from 'lucide-react'
 import { 
   WebsiteIcon, 
@@ -14,6 +14,7 @@ import {
 
 interface ProjectCardProps {
   project: Project
+  tags: Tag[]
   onEdit: (project: Project) => void
   onDelete: (id: string) => void
   onRestore: (id: string) => void
@@ -37,6 +38,7 @@ const isValidUrl = (url: string | undefined): boolean => {
 
 export default function ProjectCard({
   project,
+  tags,
   onEdit,
   onDelete,
   onRestore,
@@ -180,11 +182,19 @@ export default function ProjectCard({
       <div className="px-4 py-2 border-t border-gray-200">
         <div className="flex flex-wrap gap-2">
           {project.tags && project.tags.length > 0 ? (
-            project.tags.map((tag, index) => (
-              <span key={index} className={`px-2 py-1 rounded-full text-xs font-medium ${getTagColor(tag)}`}>
-                {tag}
-              </span>
-            ))
+            project.tags.map((tagName, index) => {
+              const tag = tags.find(t => t.name === tagName);
+              return (
+                <span 
+                  key={index} 
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    tag?.color || 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {tagName}
+                </span>
+              );
+            })
           ) : (
             <span className="text-sm text-gray-400">无标签</span>
           )}
